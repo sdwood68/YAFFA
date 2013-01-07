@@ -43,8 +43,8 @@
 /**                                                                          **/
 /**  THINGS TO FIX:                                                          **/
 /**                                                                          **/
-/**      Fix ." to put the string inline with the code definition.           **/
-/**      Fix .ABORT to put the string inline with the code definition.       **/
+/**      Done Fix ." to put the string inline with the code definition.      **/
+/**      Done Fix .ABORT to put the string inline with the code definition.  **/
 /**      Fix ENVIRONMENT? Query to take a string refeference from the stack. **/
 /**      Fix the outerinterpreter to use FIND instead of isWord              **/
 /**      Fix Serial.Print(w, HEX) from displaying negitave numbers as 32 bits**/
@@ -61,18 +61,18 @@
 #include <avr/pgmspace.h>
 #include "Yaffa.h"
 #include "Error_Codes.h"
-#include "Dictionary.h"
 
 /******************************************************************************/
 /** Uncomment for debug output                                               **/
 /******************************************************************************/
 //#define DEBUG
 
+#define ALIGN_P(x)  x = (uint8_t*)((addr_t)(x + 1) & -2)
+#define ALIGN(x)  x = ((addr_t)(x + 1) & -2)
+
 /******************************************************************************/
 /**  Text Buffers and Associated Registers                                   **/
 /******************************************************************************/
-char cInputBuffer[BUFFER_SIZE]; // Input Buffer that gets parsed
-char cTokenBuffer[TOKEN_SIZE];  // Stores Single Parsed token to be acted on
 char* cpSource;                 // Poiter to the string location that we will 
                                 // evaluate. This could be the input buffer or
                                 // some other location in memory
@@ -80,6 +80,16 @@ char* cpSourceEnd;              // Points the the end of the source string
 char* cpToIn;                   // Points to a position in the source string
                                 // that was the last character to be parsed
 char cDelimiter = ' ';          // The parsers delimiter
+char cInputBuffer[BUFFER_SIZE]; // Input Buffer that gets parsed
+char cTokenBuffer[TOKEN_SIZE];  // Stores Single Parsed token to be acted on
+
+/******************************************************************************/
+/** Terminal Constants                                                       **/
+/******************************************************************************/
+const char prompt_str[] PROGMEM = ">> ";
+const char compile_prompt_str[] PROGMEM = "|  ";
+const char ok_str[] PROGMEM = " OK";
+const char charset[] PROGMEM = "0123456789abcdef";
 
 /******************************************************************************/
 /**  Stacks and Associated Registers                                         **/
@@ -89,10 +99,10 @@ char cDelimiter = ' ';          // The parsers delimiter
 /**  is not corrupted. i.e. the same number of items are on the stack as     **/
 /**  at the end of the colon-sys as before it is started.                    **/
 /******************************************************************************/
+int8_t tos = -1;                        // The data stack index
+int8_t rtos = -1;                       // The return stack index
 cell_t stack[STACK_SIZE];               // The data stack
-int8_t tos = -1;                        // The data stack pointer
 cell_t rStack[RSTACK_SIZE];             // The return stack
-int8_t rtos = -1;                       // The return stack pointer
 
 /******************************************************************************/
 /**  Flash Dictionary Structure                                              **/
@@ -122,37 +132,23 @@ uint8_t wordFlags;             // Word flags
 int8_t errorCode = 0;
 
 /******************************************************************************/
-/** Terminal Constants                                                       **/
+/**  Forth Space (Name, Code and Data Space) and Associated Registers        **/
 /******************************************************************************/
-const char prompt_str[] PROGMEM = ">> ";
-const char compile_prompt_str[] PROGMEM = "|  ";
-const char ok_str[] PROGMEM = " OK";
-const char charset[] PROGMEM = "0123456789abcdef";
+char* pnoPtr;                // Pictured Numeric Output Pointer
+uint8_t forthSpace[FORTH_SIZE]; // Reserve a block on RAM for the forth environment
+uint8_t* pHere;              // HERE, points to the next free position in
+                             // Forth Space
+uint8_t* pOldHere;           // Used by "colon-sys"
+cell_t* pCodeStart;          // used by "colon-sys" and RECURSE
+cell_t* pDoes;               // Used by CREATE and DOES>
 
 /******************************************************************************/
 /** Forth Global Variables                                                   **/
 /******************************************************************************/
-cell_t state;     // Holds the text interpreters compile/interpreter state
-cell_t* ip;       // Instruction Pointer
-cell_t w;         // Working Register
-cell_t base;      // stores the radix for number converion
-
-/******************************************************************************/
-/**  Forth Space (Name, Code and Data Space) and Associated Registers        **/
-/******************************************************************************/
-char* pnoPtr;                     // Pictured Numeric Output Pointer
-
-char nameSpace[NAME_SIZE];        // Name Space
-char* nameSpacePtr;               // Pointer to the next free position
-char* newNameSpacePtr;            // Used by "colon-sys"            
-
-cell_t codeSpace[CODE_SIZE];      // Code Space
-cell_t* codeSpacePtr;             // Pointer to the next free position
-cell_t* newCodeSpacePtr;          // Used by "colon-sys"
-
-uint8_t dataSpace[DATA_SIZE];     // Data Space
-uint8_t* herePtr;                 // HERE, points to the next free position
-uint8_t* newHerePtr;              // Used by "colon-sys"
+cell_t state; // Holds the text interpreters compile/interpreter state
+cell_t* ip;   // Instruction Pointer
+cell_t w;     // Working Register
+cell_t base;  // stores the number converion radix
 
 /******************************************************************************/
 /** Initialization                                                           **/
@@ -191,27 +187,13 @@ void setup(void) {
   serial_print_P(PSTR(", Ends at 0x"));
   Serial.println((int)&cTokenBuffer[TOKEN_SIZE] - 1, HEX);
 
-  nameSpacePtr = nameSpace;
-  newNameSpacePtr = nameSpace;
-  serial_print_P(PSTR(" Name Space: Starts at 0x"));
-  Serial.print((int)&nameSpace[0], HEX);
+  pHere = &forthSpace[0];
+  pOldHere = pHere;
+  serial_print_P(PSTR(" Forth Space: Starts at 0x"));
+  Serial.print((int)&forthSpace[0], HEX);
   serial_print_P(PSTR(", Ends at 0x"));
-  Serial.println((int)&nameSpace[NAME_SIZE] - 1, HEX);
+  Serial.println((int)&forthSpace[FORTH_SIZE] - 1, HEX);
 
-  codeSpacePtr = codeSpace;
-  newCodeSpacePtr = codeSpace;
-  serial_print_P(PSTR(" Code Space: Starts at 0x"));
-  Serial.print((int)&codeSpace[0], HEX);
-  serial_print_P(PSTR(", Ends at 0x"));
-  Serial.println((int)&codeSpace[CODE_SIZE] - 1, HEX);
-
-  herePtr = &dataSpace[0];
-  newHerePtr = herePtr;
-  serial_print_P(PSTR(" Data Space: Starts at 0x"));
-  Serial.print((int)&dataSpace[0], HEX);
-  serial_print_P(PSTR(", Ends at 0x"));
-  Serial.println((int)&dataSpace[DATA_SIZE] - 1, HEX);
-  
   mem = freeMem();
   Serial.print(mem);
   serial_print_P(PSTR(" (0x"));
@@ -356,9 +338,11 @@ void interpreter(void) {
           }
           executeWord();
         } else {
-          *newCodeSpacePtr++ = w;
+          *(cell_t*)pHere = w;
+          pHere += sizeof(cell_t);
 #ifdef DEBUG
-          debugXT(newCodeSpacePtr - 1);
+//          debugXT((cell_t*)((cell_t)pHere - sizeof(cell_t)));
+          debugXT((cell_t*)(pHere - sizeof(cell_t)));
 #endif
         }
       } else if (isNumber(cTokenBuffer)) {
@@ -449,13 +433,17 @@ void executeWord(void) {
 /******************************************************************************/
 uint8_t isWord(char* addr) {
   uint8_t index = 0;
+  uint8_t length = 0;
   
   pUserEntry = pLastUserEntry;
   // First serarch through the user dictionary
   while(pUserEntry) {
     if (strcmp(pUserEntry->name, addr) == 0) {
-      w = pUserEntry->code;
       wordFlags = pUserEntry->flags;
+      length = strlen(pUserEntry->name);
+      w = (cell_t)pUserEntry + length + 4;
+      // Align the address in w
+      ALIGN(w);
       return(1);
     }
     pUserEntry = (userEntry_t*)pUserEntry->prevEntry;
@@ -535,92 +523,38 @@ static unsigned int freeMem(void) {
 }
 
 /******************************************************************************/
-/** Program Memory Serial Print                                              **/
-/******************************************************************************/
-uint8_t serial_print_P(PGM_P ptr) {
-  char ch;
-  uint8_t i = 79;
-  for (; i > 0; i--) {
-    ch = pgm_read_byte(ptr++);
-    if (ch == 0) break;
-    Serial.write(ch);
-  }
-  return (79 - i);
-}
-
-/******************************************************************************/
-/** Display Value                                                            **/
-/******************************************************************************/
-void displayValue(void) {
-  switch (base){
-    case 10: Serial.print(w, DEC);
-      break;
-    case 16:
-      Serial.print("0x"); 
-      Serial.print(w, HEX);
-      break;
-    case 8:  Serial.print(w, OCT);
-      break;
-    case 2:  Serial.print(w, BIN);
-      break;
-  }
-  Serial.print(" ");
-}
-
-/******************************************************************************/
-/** Debug Output Functions                                                   **/
-/******************************************************************************/
-#ifdef DEBUG
-void debugXT(cell_t* ptr) {
-  serial_print_P(PSTR("\r\n  0x"));
-  Serial.print((uint16_t)ptr, HEX);
-  serial_print_P(PSTR(" => XT 0x"));
-  Serial.print((uint16_t)*ptr, HEX);
-}
-
-void debugValue(cell_t* ptr) {
-  serial_print_P(PSTR("\r\n  0x"));
-  Serial.print((uint16_t)ptr, HEX);
-  serial_print_P(PSTR(" => VALUE 0x"));
-  Serial.print((uint16_t)*ptr, HEX);
-}
-
-void debugNewIP(void) {
-  serial_print_P(PSTR("\r\n  New IP: 0x"));
-  Serial.print((ucell_t)ip, HEX);
-}
-
-#endif
-
-/******************************************************************************/
 /** Start a New Entry in the Dictionary                                      **/
 /******************************************************************************/
 void openEntry(void) {
   uint8_t index = 0;
-  newNameSpacePtr = nameSpacePtr;
-  newCodeSpacePtr = codeSpacePtr;
-  newHerePtr = herePtr;
-  pNewUserEntry = (userEntry_t*)nameSpacePtr;
+  pOldHere = pHere;            // Save the old location of HERE so we can
+                               // abort out of the new definition
+  pNewUserEntry = (userEntry_t*)pHere;
   if (pLastUserEntry == NULL)                  
     pNewUserEntry->prevEntry = 0;              // Initialize User Dictionary
-  else pNewUserEntry->prevEntry = pLastUserEntry;
-  pNewUserEntry->code = (ucell_t)newCodeSpacePtr;
-  pNewUserEntry->flags = NORMAL;
-  newNameSpacePtr = pNewUserEntry->name;
+  else pNewUserEntry->prevEntry = (addr_t*)pLastUserEntry;
   getToken();
+  pHere = (uint8_t*)pNewUserEntry->name;
   do {
-    *newNameSpacePtr++ = cTokenBuffer[index++];
+    *pHere++ = cTokenBuffer[index++];
   } while (cTokenBuffer[index] != NULL);
-  *newNameSpacePtr++ = NULL;
+  *pHere++ = NULL;
+   
+  // Align the HERE
+  ALIGN_P(pHere);
+  pCodeStart = (cell_t*)pHere;
+
 #ifdef DEBUG
-  serial_print_P(PSTR("\r\nNEW ENTRY @ 0x"));
-  Serial.print((uint16_t)pNewUserEntry, HEX);
-  serial_print_P(PSTR("\r\n  NAME: "));
+  serial_print_P(PSTR("\r\nNEW ENTRY @ "));
+  Serial.print((uint16_t)pNewUserEntry);
+  serial_print_P(PSTR("\r\n  NAME Starts @ "));
+  Serial.print((uint16_t)pNewUserEntry->name);
+  serial_print_P(PSTR(" = "));
   Serial.print(pNewUserEntry->name);
-  serial_print_P(PSTR("\r\n  Previous Entry @ 0x"));
-  Serial.print((uint16_t)pNewUserEntry->prevEntry, HEX);
-  serial_print_P(PSTR("\r\n  Code Starts @ 0x"));
-  Serial.print((uint16_t)pNewUserEntry->code, HEX);
+  serial_print_P(PSTR("\r\n  Previous Entry @ "));
+  Serial.print((uint16_t)pNewUserEntry->prevEntry);
+  serial_print_P(PSTR("\r\n  Code Starts @ "));
+  Serial.print((uint16_t)pHere);
 #endif
 }
 
@@ -629,16 +563,15 @@ void openEntry(void) {
 /******************************************************************************/
 void closeEntry(void) {
   if (errorCode == 0) {
-    *newCodeSpacePtr++ = (cell_t)EXIT_IDX;
-    nameSpacePtr = newNameSpacePtr;
-    codeSpacePtr = newCodeSpacePtr;
-    herePtr = newHerePtr;
+    *(cell_t*)pHere = EXIT_IDX;
+    pHere += sizeof(cell_t);
+    pLastUserEntry = pNewUserEntry;
 #ifdef DEBUG
-    debugXT(newCodeSpacePtr - 1);
+    debugXT((cell_t*)(pHere - sizeof(cell_t)));
     serial_print_P(PSTR("\r\nEntry Closed"));
 #endif
-  }
-  pLastUserEntry = pNewUserEntry;
+  } else pHere = pOldHere;   // Revert pHere to what it was before the start
+                             // of the new word definition
 }
 
 /******************************************************************************/
@@ -730,4 +663,68 @@ cell_t rPop(void) {
   }
   return 0;
 }
+
+/******************************************************************************/
+/** String and Serial Functions                                              **/
+/******************************************************************************/
+void displayValue(void) {
+  switch (base){
+    case 10: Serial.print(w, DEC);
+      break;
+    case 16:
+      Serial.print("0x"); 
+      Serial.print(w, HEX);
+      break;
+    case 8:  Serial.print(w, OCT);
+      break;
+    case 2:  Serial.print(w, BIN);
+      break;
+  }
+  Serial.print(" ");
+}
+
+uint8_t serial_print_P(PGM_P ptr) {
+  char ch;
+  uint8_t i = 79;
+  for (; i > 0; i--) {
+    ch = pgm_read_byte(ptr++);
+    if (ch == 0) break;
+    Serial.write(ch);
+  }
+  return (79 - i);
+}
+
+// String Compare, Both strings in RAM
+uint8_t f_strcmp(char* addr1, char* addr2) {
+}
+
+// String Copy, Both strings in RAM
+uint8_t f_strcpy(char* addr1, char* addr2) {
+}
+
+/******************************************************************************/
+/** Debug Output Functions                                                   **/
+/******************************************************************************/
+#ifdef DEBUG
+void debugXT(void* ptr) {
+  serial_print_P(PSTR("\r\n  Addr: "));
+  Serial.print((uint16_t)ptr);
+  serial_print_P(PSTR(" => XT: "));
+  Serial.print(*(ucell_t*)ptr);
+}
+
+void debugValue(void* ptr) {
+  serial_print_P(PSTR("\r\n  Addr: "));
+  Serial.print((uint16_t)ptr);
+  serial_print_P(PSTR(" => VALUE: "));
+  Serial.print(*(uint16_t*)ptr);
+}
+
+void debugNewIP(void) {
+  serial_print_P(PSTR("\r\n  New IP: "));
+  Serial.print((ucell_t)ip);
+}
+
+#endif
+
 

@@ -21,6 +21,20 @@
 /**                                                                          **/
 /******************************************************************************/
 
+/*******************************************************************************/
+/**                       Enable Dictionary Word Sets                         **/
+/*******************************************************************************/
+#define CORE_EXT_SET
+//#define DOUBLE_SET
+#define EXCEPTION_SET
+//#define LOCALS_SET
+//#define MEMORY_SET
+#define TOOLS_SET
+//#define SEARCH_SET
+//#define STRING_SET
+#define EN_ARDUINO_OPS
+#define EN_EEPROM_OPS
+
 /******************************************************************************/
 /**  Enviromental Constansts and Name Strings                                **/
 /******************************************************************************/
@@ -42,9 +56,7 @@
 
 #define BUFFER_SIZE   96        // Min. size is 80 charicters for ANS Forth
 #define TOKEN_SIZE    32        // Definitions names shall contain 1 to 31 char.
-#define NAME_SIZE     256       // Size of Name Space in characters
-#define CODE_SIZE     192       // Size of Code Space in cells
-#define DATA_SIZE     256       // Size of Data Space in characters
+#define FORTH_SIZE   1280      // Size of Forth Space in bytes
 
 /******************************************************************************/
 /**  Forth True and False                                                    **/
@@ -60,6 +72,7 @@
 #define SMUDGE         0x20    // Word is hidden during searches
 #define COMP_ONLY      0x40    // Word is only useable during compolation
 #define IMMEDIATE      0x80    // Word is executed during compolation state
+#define LENGTH_MASK    0x1F    // Mask for the length of the string
 
 /******************************************************************************/
 /**  Control Flow Stack Data Types                                           **/
@@ -82,15 +95,50 @@ typedef uint16_t addr_t;
 /******************************************************************************/
 /**  User Dictionary is stored in name space.                                **/
 /******************************************************************************/
-typedef struct  {               // structure of the user dictionary
-  void*          prevEntry;     // Pointer to 'len' field of previous entry
-  ucell_t        code;          // SRAM Address for the start of the code
-  uint8_t        flags;         // Flags for word types
-  char           name[];        // Variable length name
+typedef struct  {             // structure of the user dictionary
+  addr_t*      prevEntry;     // Pointer to the previous entry
+  uint8_t      flags;        // Holds the length of the following name 
+                              // and any flags.
+  char         name[];        // Variable length name
 } userEntry_t;
+
+/******************************************************************************/
+/**  Flash Dictionary Structure                                              **/
+/******************************************************************************/
+typedef void (*func)(void);         // signature of functions in dictionary
+
+typedef struct  {                   // Structure of the dictionary
+  const char*    name;              // Pointer the Word Name in flash
+  const func     function;          // Pointer to function
+  const uint8_t  flags;             // Holds word type flags
+} flashEntry_t;
+
+extern flashEntry_t flashDict[];        // forward reference
+
+/******************************************************************************/
+/**  Flash Dictionary Index References                                       **/
+/**  This words referenced here must match the order in the begining of the  **/
+/**  dictionary flashDict[]
+/******************************************************************************/
+#define EXIT_IDX           1
+#define LITERAL_IDX        2
+#define TYPE_IDX           3
+#define JUMP_IDX           4
+#define ZJUMP_IDX          5
+#define NZJUMP_IDX         6
+#define SUBROUTINE_IDX     7
+#define THROW_IDX          8
+#define DO_SYS_IDX         9
+#define LOOP_SYS_IDX       10
+#define LEAVE_SYS_IDX      11
+#define PLUS_LOOP_SYS_IDX  12
+#define EXECUTE_IDX        13
+#define S_QUOTE_IDX        14
+#define DOT_QUOTE_IDX      15
+#define VARIABLE_IDX       16
 
 /*****************************************************************************/
 /** Function Prototypes                                                     **/
 /*****************************************************************************/
-uint8_t serial_print_P(const char* ptr);  //prototype of function in Forth.c
+//uint8_t serial_print_P(const char* ptr);  //prototype of function in Forth.c
 

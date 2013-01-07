@@ -53,10 +53,9 @@ static void _nzjump(void) {
 
 PROGMEM char subroutine_str[] = "subroutine";
 static void _subroutine(void) {
-  cell_t* dest = newCodeSpacePtr - 2;  // jump back 2 locations
-  *dest = (cell_t)*ip++;
+  *pDoes = (cell_t)*ip++;
 #ifdef DEBUG
-  debugValue(dest);
+  debugValue(pDoes);
 #endif
 }
 
@@ -125,7 +124,7 @@ static void _plus_loop_sys(void) {
   cell_t limit = rPop();    // fetch limit
   cell_t index = rPop();    // fetch index
   index += pop();
-  if(limit - index > 0) {
+  if(limit != index) {
     rPush(index);
     rPush(limit);
     ip = (cell_t*)*ip;
@@ -201,11 +200,11 @@ static void _number_sign_s(void) {
       ud /= base;
   }
 #ifdef DEBUG
-  Serial.print("  ud = ");
+  serial_print_P(PSTR("  ud = "));
   Serial.println(ud);
-  Serial.print("  pnoPtr = 0x");
+  serial_print_P(PSTR("  pnoPtr = 0x"));
   Serial.print((addr_t)pnoPtr, HEX);
-  Serial.print(" = ");
+  serial_print_P(PSTR(" = "));
   Serial.println((char)*pnoPtr);
 #endif
   push((ucell_t)ud);
@@ -283,7 +282,8 @@ PROGMEM char plus_store_str[] = "+!";
 // add n|u to the single cell number at a-addr
 static void _plus_store(void) { 
   addr_t address = pop();
-  if (address >= (addr_t)&dataSpace[0] && address < (addr_t)&dataSpace[DATA_SIZE])
+  if (address >= (addr_t)&forthSpace[0] && 
+      address < (addr_t)&forthSpace[FORTH_SIZE])
     *((unsigned char*) address) += pop();
   else {
     push(-9);
@@ -305,18 +305,20 @@ PROGMEM char plus_loop_str[] = "+loop";
 // of the loop. Otherwise, discard the current loop control parameters and 
 // continue execution immediately following the loop.
 static void _plus_loop(void) { 
-  *newCodeSpacePtr++ = PLUS_LOOP_SYS_IDX;
+  *(cell_t*)pHere = PLUS_LOOP_SYS_IDX;
 #ifdef DEBUG
-  debugXT(newCodeSpacePtr - 1);
+  debugXT(pHere);
 #endif
-  *newCodeSpacePtr++ = pop();
+  pHere += sizeof(cell_t);
+  *(cell_t*)pHere = pop();
 #ifdef DEBUG
-  debugXT(newCodeSpacePtr - 1);
+  debugXT(pHere);
 #endif
+  pHere += sizeof(cell_t);
   cell_t* leave = (cell_t*)pop();
   if (leave != (cell_t*)DO_SYS) {
     if (stack[tos] == DO_SYS) {
-      *leave = (ucell_t)newCodeSpacePtr;
+      *leave = (ucell_t)pHere;
       pop();
     } else {
       push(-22);
@@ -328,10 +330,14 @@ static void _plus_loop(void) {
 
 PROGMEM char comma_str[] = ",";
 // ( x --  )
+// Reserve one cell of data space and store x in the cell. If the data-space
+// pointer is aligned when , begins execution, it will remain aligned when ,
+// finishes execution. An ambiguous condition exists if the data-space pointer
+// is not aligned prior to execution of ,.
 static void _comma(void) { 
-//  if (((cell_t)herePtr & 1) == 0) {
-    *(cell_t*)herePtr = pop();
-    herePtr += sizeof(cell_t);
+//  if (((cell_t)pHere & 1) == 0) {
+    *(cell_t*)pHere = pop();
+    pHere += sizeof(cell_t);
 //  } else {
 //    push(-23);
 //    _throw();
@@ -360,11 +366,38 @@ PROGMEM char dot_quote_str[] = ".\x22";
 // Run-Time ( -- )
 // Display ccc. 
 static void _dot_quote(void) {
-  _s_quote();
-  *newCodeSpacePtr++ = TYPE_IDX;
+  uint8_t i;
+  char length;
+  if (state) {
+    cDelimiter = '"';
+    getToken();
+    length = strlen(cTokenBuffer);
+    *(cell_t*)pHere = (cell_t)DOT_QUOTE_IDX;
 #ifdef DEBUG
-  debugXT(newCodeSpacePtr - 1);
+    debugXT(pHere);
 #endif
+    pHere += sizeof(cell_t);
+#ifdef DEBUG
+    serial_print_P(PSTR("\r\n  String @ "));
+    char* str = (char*)pHere;
+    Serial.print((ucell_t)str);
+#endif
+    for (uint8_t i = 0; i < length; i++) {
+      *(char*)pHere++ = cTokenBuffer[i];
+    }
+    *(char*)pHere++ = NULL;    // Terminate String
+#ifdef DEBUG
+    serial_print_P(PSTR(": "));
+    Serial.print(str);
+#endif
+    ALIGN_P(pHere);  // re- align the pHere for any new code
+    cDelimiter = ' ';
+  } else {
+    Serial.print((char*)ip);
+    cell_t len = strlen((char*)ip) + 1;  // include null termiantor
+    ALIGN(len);
+    ip = (cell_t*)((cell_t)ip + len);
+  }
 }
 
 PROGMEM char slash_str[] = "/";
@@ -430,11 +463,10 @@ PROGMEM char two_store_str[] = "2!";
 // Store the cell pair x1 x2 at a-addr, with x2 at a-addr and x1 at a-addr+1
 static void _two_store(void) { 
   addr_t address = pop();
-  if (address >= (addr_t)&dataSpace[0] && 
-      address < (addr_t)&dataSpace[DATA_SIZE-1]) {
-    *((cell_t*) address) = pop();
-    address += sizeof(cell_t);
-    *((cell_t*) address) = pop();
+  if (address >= (addr_t)&forthSpace[0] && 
+      address < (addr_t)&forthSpace[FORTH_SIZE - 4]) {
+    *(cell_t*)address++ = pop();
+    *(cell_t*)address = pop();
   } else {
     push(-9);
     _throw();
@@ -508,9 +540,7 @@ PROGMEM char colon_str[] = ":";
 // and start the current definition, producing a colon-sys. Append the 
 // initiation semantics given below to the current definition....
 static void _colon(void) {
-//  flags |= COMPILE;
   state = TRUE;
-//  csp = tos;
   push(COLON_SYS);
   openEntry();
 }
@@ -541,7 +571,7 @@ PROGMEM char lt_number_sign_str[] = "<#";
 // ( -- )
 // Initialize the pictured numeric output conversion process.
 static void _lt_number_sign(void) { 
-  pnoPtr = (char*)herePtr + HOLD_SIZE + 1;
+  pnoPtr = (char*)pHere + HOLD_SIZE + 1;
   *pnoPtr = NULL;
 #ifdef DEBUG
   Serial.print("pnoPtr = 0x");
@@ -568,6 +598,8 @@ static void _gt(void) {
 
 PROGMEM char to_body_str[] = ">body";
 // ( xt -- a-addr )
+// a-addr is the data-feild address corresponding to xt. An ambiguous condition
+// exists if xt is not for a word defined by CREATE.
 static void _to_body(void) {
   cell_t* xt = (cell_t*)pop();
   if ((cell_t)xt > 0xFF) {
@@ -641,29 +673,46 @@ static void _abort(void) {
 }
 
 PROGMEM char abort_quote_str[] = "abort\x22";
+// Interpretation: Interpretation semantics for this word are undefined.
 // Compilation: ( "ccc<quote>" -- )
-// Runt-Time: 
+// Parse ccc delimited by a ". Append the run-time semantics given below to the
+// current definition.
+// Runt-Time: (i*x x1 -- | i*x ) (R: j*x -- |j*x )
+// Remove x1 from the stack. If any bit of x1 is not zero, display ccc and 
+// preform an implementation-defined abort sequence that included the function
+// of ABORT.
 static void _abort_quote(void) {
-  *newCodeSpacePtr++ = ZJUMP_IDX;
+  *(cell_t*)pHere = ZJUMP_IDX;
 #ifdef DEBUG
-  debugXT(newCodeSpacePtr - 1);
+  debugXT(pHere);
 #endif
-  push((cell_t)newCodeSpacePtr);
-  *newCodeSpacePtr++ = 0;
+  pHere += sizeof(cell_t);
+  push((cell_t)pHere);
+  *(cell_t*)pHere = 0;
 #ifdef DEBUG
-  debugXT(newCodeSpacePtr - 1);
+  debugXT(pHere);
 #endif
+  pHere += sizeof(cell_t);
   _dot_quote();
-  *newCodeSpacePtr++ = LITERAL_IDX;
-  *newCodeSpacePtr++ = -2;
-  *newCodeSpacePtr++ = THROW_IDX;
+  *(cell_t*)pHere = LITERAL_IDX;
 #ifdef DEBUG
-  debugXT(newCodeSpacePtr - 1);
+  debugXT(pHere);
 #endif
-  cell_t* orig = (cell_t*)pop();
-  *orig = (ucell_t)newCodeSpacePtr;
+  pHere += sizeof(cell_t);
+  *(cell_t*)pHere = -2;
 #ifdef DEBUG
-  debugValue(newCodeSpacePtr);
+  debugXT(pHere);
+#endif
+  pHere += sizeof(cell_t);
+  *(cell_t*)pHere = THROW_IDX;
+#ifdef DEBUG
+  debugXT(pHere);
+#endif
+  pHere += sizeof(cell_t);
+  cell_t* orig = (cell_t*)pop();
+  *orig = (ucell_t)pHere;
+#ifdef DEBUG
+  debugValue(pHere);
 #endif
 }
 
@@ -688,7 +737,7 @@ PROGMEM char align_str[] = "align";
 // ( -- )
 // if the data-space pointer is not aligned, reserve enough space to align it.
 static void _align(void) {
-  herePtr = (uint8_t*)((int16_t)(herePtr + 1) & -2);
+  ALIGN_P(pHere);
 }
 
 PROGMEM char aligned_str[] = "aligned";
@@ -699,11 +748,16 @@ static void _aligned(void) {
 
 PROGMEM char allot_str[] = "allot";
 // ( n -- )
+// if n is greater than zero, reserve n address units of data space. if n is less
+// than zero, release |n| address units of data space. if n is zero, leave the 
+// data-space pointer unchanged.
 static void _allot(void) {
-  newHerePtr = (uint8_t*)((int16_t)herePtr + pop());
-  if (newHerePtr - &dataSpace[0] <= DATA_SIZE) {
-    herePtr = newHerePtr;
-  } else {
+  uint8_t* pNewHere = pHere + pop();
+  // Check that the new pHere is not ouside of the forth space
+  if (pNewHere >= &forthSpace[0] &&
+      pNewHere < &forthSpace[FORTH_SIZE]) {
+    pHere = pNewHere;      // Save the vaild address
+  } else {                 // Throw an exception 
     push(-9);
     _throw();
   }
@@ -730,7 +784,8 @@ PROGMEM char begin_str[] = "begin";
 // Run-time: ( -- )
 // Continue execution.
 static void _begin(void) {
-  push((cell_t)newCodeSpacePtr++);
+  push((cell_t)pHere);
+  pHere += sizeof(cell_t);
 }
 
 PROGMEM char bl_str[] = "bl";
@@ -750,7 +805,7 @@ static void _c_store(void) {
 PROGMEM char c_comma_str[] = "c,";
 // ( char -- )
 static void _c_comma(void) {
-  *herePtr++ = (char)pop();
+  *(char*)pHere++ = (char)pop();
 }
 
 PROGMEM char c_fetch_str[] = "c@";
@@ -801,8 +856,16 @@ PROGMEM char constant_str[] = "constant";
 // ( x"<spaces>name" --  )
 static void _constant(void) {
   openEntry();
-  *newCodeSpacePtr++ = (cell_t)LITERAL_IDX;
-  *newCodeSpacePtr++ = pop();
+  *(cell_t*)pHere = (cell_t)LITERAL_IDX;
+#ifdef DEBUG
+  debugXT(pHere);
+#endif
+  pHere += sizeof(cell_t);
+  *(cell_t*)pHere = pop();
+#ifdef DEBUG
+  debugXT(pHere);
+#endif
+  pHere += sizeof(cell_t);
   closeEntry();
 }
 
@@ -823,14 +886,26 @@ static void _cr(void) {
 
 PROGMEM char create_str[] = "create";
 // ( "<spaces>name" -- )
+// Skip leading space delimiters. Parse name delimited by a space. Create a 
+// definition for name with the execution sematics defined below. If the data-space
+// pointer is not aligned, reserve enough data space to align it. The new data-space
+// pointer defines name's data field. CREATE does not allocate data space in name's
+// data feild.
+// name EXECUTION: ( -- a-addr )
+// a-addr is the address of name's data field. The execution semantics of name may 
+// be extended by using DOES>.
 static void _create(void) {
-  _align();                           // Align the data space pointer 'here'
   openEntry();
-  *newCodeSpacePtr++ = LITERAL_IDX;
-  *newCodeSpacePtr++ = (cell_t)newHerePtr;
-  *newCodeSpacePtr++ = 0;             // Store an extra exit reference so 
-                                      // that it can be replace by a 
-                                      // subroutine pointer by DOES>
+  *(cell_t*)pHere = LITERAL_IDX;
+  pHere += sizeof(cell_t);
+  *(cell_t*)pHere = (cell_t)pHere + 3 * sizeof(cell_t); // Location of Data Field at the 
+                                                // end of the definition.
+  pHere += sizeof(cell_t);
+  *(cell_t*)pHere = EXIT_IDX;   // Store an extra exit reference so 
+                                // that it can be replace by a 
+                                // subroutine pointer created by DOES>
+  pDoes = (cell_t*)pHere;        // Save this location for uses by subroutine.
+  pHere += sizeof(cell_t);
   if (!state) closeEntry();           // Close the entry if interpreting
 }
 
@@ -853,11 +928,12 @@ PROGMEM char do_str[] = "do";
 // Run-Time: ( n1|u1 n2|u2 -- ) (R: -- loop-sys )
 static void _do(void) {
   push(DO_SYS);
-  *newCodeSpacePtr++ = DO_SYS_IDX;
+  *(cell_t*)pHere = DO_SYS_IDX;
 #ifdef DEBUG
-  debugXT(newCodeSpacePtr - 1);
+  debugXT(pHere);
 #endif
-  push((cell_t)newCodeSpacePtr); // store the origin address of the do loop 
+  pHere += sizeof(cell_t);
+  push((cell_t)pHere); // store the origin address of the do loop 
 }
 
 PROGMEM char does_str[] = "does>";
@@ -865,16 +941,23 @@ PROGMEM char does_str[] = "does>";
 // Run-Time: ( -- ) (R: nest-sys1 -- )
 // Initiation: ( i*x -- i*x a-addr ) (R: -- next-sys2 )
 static void _does(void) {
-  *newCodeSpacePtr++ = SUBROUTINE_IDX;
-  cell_t* dest = newCodeSpacePtr;
-  *newCodeSpacePtr++ = 0;   // location for subroutine call
+  *(cell_t*)pHere = SUBROUTINE_IDX;
 #ifdef DEBUG
-  debugXT(newCodeSpacePtr - 1);
+  debugXT(pHere);
 #endif
-  closeEntry();
+  pHere += sizeof(cell_t);
+  // Store location for subroutine call
+  *(cell_t*)pHere = (cell_t)pHere + 2 * sizeof(cell_t);  
+#ifdef DEBUG
+  debugXT(pHere);
+#endif
+  pHere += sizeof(cell_t);
+  *(cell_t*)pHere = EXIT_IDX;
+#ifdef DEBUG
+  debugXT(pHere);
+#endif
+  pHere += sizeof(cell_t);
   // Start Subroutine coding
-  *dest = (cell_t)newCodeSpacePtr;  // save the start of the subroutine back
-                                    // into the previous definition
 }
 
 PROGMEM char drop_str[] = "drop";
@@ -897,12 +980,14 @@ PROGMEM char else_str[] = "else";
 // Run-Time: ( -- )
 static void _else(void) {
   cell_t* orig = (cell_t*)pop();
-  *newCodeSpacePtr++ = JUMP_IDX;
+  *(cell_t*)pHere = JUMP_IDX;
 #ifdef DEBUG
-  debugXT(newCodeSpacePtr - 1);
+  debugXT(pHere);
 #endif
-  push((cell_t)newCodeSpacePtr++);
-  *orig = (ucell_t)newCodeSpacePtr;
+  pHere += sizeof(cell_t);
+  push((cell_t)pHere);
+  pHere += sizeof(cell_t);
+  *orig = (ucell_t)pHere;
 #ifdef DEBUG
   debugValue(orig);
 #endif
@@ -917,57 +1002,67 @@ static void _emit(void) {
 
 PROGMEM char environment_str[] = "environment?";
 // ( c-addr u  -- false|i*x true )
+// c-addr is the address of a character string and u is the string's character
+// count. u may have a value in the range from zero to an implementation-defined
+// maximum which shall not be less than 31. The character string should contain
+// a keyword from 3.2.6 Environmental queries or the optional word sets to to be
+// checked for correspondence with  an attribute of the the present environment.
+// If the system treats the attribute as unknown, the return flag is false; 
+// otherwise, the flag is true and i*x returned is the of the type specified in 
+// the table  for the attribute queried.
 static void _environment(void) {
-  if (getToken()) {
-    if (!strcmp_P(cTokenBuffer, PSTR("/counted-string"))) {
+  char length = (char)pop();
+  char* pStr = (char*)pop();
+  if (length && length < STRING_SIZE) {
+    if (!strcmp_P(pStr, PSTR("/counted-string"))) {
       push(STRING_SIZE);
       return;
     }
-    if (!strcmp_P(cTokenBuffer, PSTR("/hold"))) {
+    if (!strcmp_P(pStr, PSTR("/hold"))) {
       push(HOLD_SIZE); 
       return;
     }
-    if (!strcmp_P(cTokenBuffer, PSTR("address-unit-bits"))) {
+    if (!strcmp_P(pStr, PSTR("address-unit-bits"))) {
       push(ADDRESS_BITS); 
       return;
     }
-    if (!strcmp_P(cTokenBuffer, PSTR("core"))) {
+    if (!strcmp_P(pStr, PSTR("core"))) {
       push(FALSE); 
       return;
     }
-    if (!strcmp_P(cTokenBuffer, PSTR("core-ext"))) {
+    if (!strcmp_P(pStr, PSTR("core-ext"))) {
       push(FALSE); 
       return;
     }
-    if (!strcmp_P(cTokenBuffer, PSTR("floored"))) {
+    if (!strcmp_P(pStr, PSTR("floored"))) {
       push(FLOORED); 
       return;
     }
-    if (!strcmp_P(cTokenBuffer, PSTR("max-char"))) {
+    if (!strcmp_P(pStr, PSTR("max-char"))) {
       push(MAX_CHAR); 
       return;
     }
-    if (!strcmp_P(cTokenBuffer, PSTR("max-d"))) {
+    if (!strcmp_P(pStr, PSTR("max-d"))) {
       push(MAX_D); 
       return;
     }
-    if (!strcmp_P(cTokenBuffer, PSTR("max-n"))) {
+    if (!strcmp_P(pStr, PSTR("max-n"))) {
       push(MAX_N); 
       return;
     }
-    if (!strcmp_P(cTokenBuffer, PSTR("max-u"))) {
+    if (!strcmp_P(pStr, PSTR("max-u"))) {
       push(MAX_U); 
       return;
     }
-    if (!strcmp_P(cTokenBuffer, PSTR("max-ud"))) {
+    if (!strcmp_P(pStr, PSTR("max-ud"))) {
       push(MAX_UD); 
       return;
     }
-    if (!strcmp_P(cTokenBuffer, PSTR("return-stack-size"))) {
+    if (!strcmp_P(pStr, PSTR("return-stack-size"))) {
       push(RSTACK_SIZE); 
       return;
     }
-    if (!strcmp_P(cTokenBuffer, PSTR("stack-size"))) {
+    if (!strcmp_P(pStr, PSTR("stack-size"))) {
       push(STACK_SIZE); 
       return;
     }
@@ -1067,7 +1162,11 @@ static void _find(void) {
   // First serarch through the user dictionary
   while(pUserEntry) {
     if (strcmp(pUserEntry->name, ptr) == 0) {
-      push(pUserEntry->code);
+      length = strlen(pUserEntry->name);
+      w = (cell_t)pUserEntry + length + 4;
+      // Align the address in w
+      ALIGN(w);
+      push(w);
       if(pUserEntry->flags & IMMEDIATE) push(1);
       else push(-1);
       return;
@@ -1102,7 +1201,7 @@ PROGMEM char here_str[] = "here";
 // ( -- addr )
 // addr is the data-space pointer.
 static void _here(void) {
-  push((cell_t)herePtr);
+  push((cell_t)pHere);
 }
 
 PROGMEM char hold_str[] = "hold";
@@ -1126,18 +1225,26 @@ PROGMEM char if_str[] = "if";
 // Compilation: (C: -- orig )
 // Run-Time: ( x -- )
 static void _if(void) {
-  *newCodeSpacePtr++ = ZJUMP_IDX;
+  *(cell_t*)pHere = ZJUMP_IDX;
 #ifdef DEBUG
-  debugXT(newCodeSpacePtr - 1);
+  debugXT(pHere);
 #endif
-  push((cell_t)newCodeSpacePtr++);
+  pHere += sizeof(cell_t);
+  *(cell_t*)pHere = 0;
+  push((cell_t)pHere);
+#ifdef DEBUG
+  debugXT(pHere);
+#endif
+  pHere +=sizeof(cell_t);
 }
 
 PROGMEM char immediate_str[] = "immediate";
 // ( -- )
 // make the most recent definition an immediate word.
 static void _immediate(void) {
-  pLastUserEntry->flags |= IMMEDIATE;
+  if (pLastUserEntry) {
+    pLastUserEntry->flags |= IMMEDIATE;
+  }
 }
 
 PROGMEM char invert_str[] = "invert";
@@ -1167,9 +1274,17 @@ PROGMEM char leave_str[] = "leave";
 // Interpretation: undefined
 // Execution: ( -- ) (R: loop-sys -- )
 static void _leave(void) {
-  *newCodeSpacePtr++ = LEAVE_SYS_IDX;
-  push((cell_t)newCodeSpacePtr);
-  *newCodeSpacePtr++ = 0;
+  *(cell_t*)pHere = LEAVE_SYS_IDX;
+#ifdef DEBUG
+  debugXT(pHere);
+#endif
+  pHere +=sizeof(cell_t);
+  push((cell_t)pHere);
+  *(cell_t*)pHere = 0;
+#ifdef DEBUG
+  debugXT(pHere);
+#endif
+  pHere +=sizeof(cell_t);
   _swap();
 }
 
@@ -1180,19 +1295,18 @@ PROGMEM char literal_str[] = "literal";
 // Place x on the stack
 static void _literal(void) {
   if (state) {
-    *newCodeSpacePtr++ = (cell_t)LITERAL_IDX;
+    *(cell_t*)pHere = (cell_t)LITERAL_IDX;
 #ifdef DEBUG
-    debugXT(newCodeSpacePtr - 1);
+    debugXT((cell_t*)pHere);
 #endif
-*newCodeSpacePtr++ = pop();
+    pHere += sizeof(cell_t);
+    *(cell_t*)pHere = pop();
 #ifdef DEBUG
-    debugXT(newCodeSpacePtr - 1);
+    debugXT(pHere);
 #endif
+    pHere += sizeof(cell_t);
   } else {
     push(*ip++);
-#ifdef DEBUG
-    debugNewIP();
-#endif
   } 
 }
 
@@ -1201,19 +1315,20 @@ PROGMEM char loop_str[] = "loop";
 // Compilation: (C: do-sys -- )
 // Run-Time: ( -- ) (R: loop-sys1 -- loop-sys2 )
 static void _loop(void) {
-//  serial_print_P(not_done_str); 
-  *newCodeSpacePtr++ = LOOP_SYS_IDX;
+  *(cell_t*)pHere = LOOP_SYS_IDX;
 #ifdef DEBUG
-  debugXT(newCodeSpacePtr - 1);
+  debugXT(pHere);
 #endif
-  *newCodeSpacePtr++ = pop();
+  pHere += sizeof(cell_t);
+  *(cell_t*)pHere = pop();
 #ifdef DEBUG
-  debugXT(newCodeSpacePtr - 1);
+  debugXT(pHere);
 #endif
+  pHere += sizeof(cell_t);
   cell_t* leave = (cell_t*)pop();
   if (leave != (cell_t*)DO_SYS) {
     if (stack[tos] == DO_SYS) {
-      *leave = (ucell_t)newCodeSpacePtr;
+      *leave = (ucell_t)pHere;
       pop();
     } else {
       push(-22);
@@ -1275,7 +1390,7 @@ static void _move(void) {
   cell_t u = pop();
   addr_t *to = (addr_t*)pop();
   addr_t *from = (addr_t*)pop();
-  while (u > 0) {
+  for (cell_t i = 0; i < u; i++) {
     *to++ = *from++;
   }
 }
@@ -1320,10 +1435,11 @@ static void _postpone(void) {
         if (errorCode) return;
       }
     } else {
-      *newCodeSpacePtr++ = (cell_t)w;
+      *(cell_t*)pHere = (cell_t)w;
 #ifdef DEBUG
-      debugXT(newCodeSpacePtr - 1);
+      debugXT(pHere);
 #endif
+      pHere += sizeof(cell_t);
     }
   } else {
     push(-13);
@@ -1373,10 +1489,11 @@ PROGMEM char recurse_str[] = "recurse";
 // definition. An ambiguous condition exists if RECURSE appends in a definition 
 // after DOES>.
 static void _recurse(void) { 
-  *newCodeSpacePtr++ = (cell_t) codeSpacePtr;
+  *(cell_t*)pHere = (cell_t)pCodeStart;
 #ifdef DEBUG
-  debugXT(newCodeSpacePtr - 1);
+  debugXT(pHere);
 #endif
+  pHere += sizeof(cell_t);
 }
 
 PROGMEM char repeat_str[] = "repeat";
@@ -1388,16 +1505,18 @@ static void _repeat(void) {
   cell_t dest;
   cell_t* orig;
   dest = pop();
-  *newCodeSpacePtr++ = JUMP_IDX;
+  *(cell_t*)pHere = JUMP_IDX;
 #ifdef DEBUG
-  debugXT(newCodeSpacePtr - 1);
+  debugXT(pHere);
 #endif
-  *newCodeSpacePtr++ = dest;
+  pHere += sizeof(cell_t);
+  *(cell_t*)pHere = dest;
 #ifdef DEBUG
-  debugValue(newCodeSpacePtr - 1);
+  debugXT(pHere);
 #endif
+  pHere += sizeof(cell_t);
   orig = (cell_t*)pop();
-  *orig = (cell_t)newCodeSpacePtr;
+  *orig = (cell_t)pHere;
 #ifdef DEBUG
   debugValue(orig);
 #endif
@@ -1424,42 +1543,47 @@ static void _rshift(void) {
 }
 
 PROGMEM char s_quote_str[] = "s\x22"; 
-// Compilation ("ccc<quote>" -- )
-// Parse ccc delimited by "
-// Run-Time ( -- c-addr u )
-// Return c-addr and u decribing a string cosisting of the characters ccc. 
+// Interpretation: Interpretation semantics for this word are undefined.
+// Compilation: ("ccc<quote>" -- )
+// Parse ccc delimited by ". append the run-time sematics given below to the 
+// current definition.
+// Run-Time: ( -- c-addr u )
+// Return c-addr and u decribing a string cosisting of the characters ccc. A program
+// shall not alter the returned string.
 static void _s_quote(void) {
   uint8_t i;
   char length;
-  cDelimiter = '"';
-  getToken();
-  length = strlen(cTokenBuffer);
-  *newCodeSpacePtr++ = (cell_t)LITERAL_IDX;
+  if (state) {
+    cDelimiter = '"';
+    getToken();
+    length = strlen(cTokenBuffer);
+    *(cell_t*)pHere = (cell_t)S_QUOTE_IDX;
+  #ifdef DEBUG
+    debugXT(pHere);
+  #endif
+    pHere += sizeof(cell_t);
 #ifdef DEBUG
-  debugXT(newCodeSpacePtr - 1);
+    serial_print_P(PSTR("\r\n  String @ "));
+    char* str = (char*)pHere;
+    Serial.print((ucell_t)str);
 #endif
-  *newCodeSpacePtr++ = (cell_t)newHerePtr;
+    for (uint8_t i = 0; i < length; i++) {
+      *(char*)pHere++ = cTokenBuffer[i];
+    }
+    *(char*)pHere++ = NULL;    // Terminate String
 #ifdef DEBUG
-  debugXT(newCodeSpacePtr - 1);
+    serial_print_P(PSTR(": "));
+    Serial.print(str);
 #endif
-  *newCodeSpacePtr++ = (cell_t)LITERAL_IDX;
-#ifdef DEBUG
-  debugXT(newCodeSpacePtr - 1);
-#endif
-  *newCodeSpacePtr++ = (cell_t)length;
-#ifdef DEBUG
-  debugXT(newCodeSpacePtr - 1);
-  char* str = (char*)newHerePtr;
-#endif
-  for (uint8_t i = 0; i < length; i++) {
-    *newHerePtr++ = cTokenBuffer[i];
+    ALIGN_P(pHere);  // re- align the pHere for any new code
+    cDelimiter = ' ';
+  } else {
+    push((cell_t)ip);
+    cell_t len = strlen((char*)ip);
+    push(len++);    // increment for the null terminator
+    ALIGN(len);
+    ip = (cell_t*)((cell_t)ip + len);
   }
-  *newHerePtr++ = NULL;    // Terminate String
-#ifdef DEBUG
-  serial_print_P(PSTR("\r\n  String: "));
-  Serial.print(str);
-#endif    
-  cDelimiter = ' ';
 }
 
 PROGMEM char s_to_d_str[] = "s>d";
@@ -1537,9 +1661,9 @@ PROGMEM char then_str[] = "then";
 // Run-Time: ( -- )
 static void _then(void) {
   cell_t* orig = (cell_t*)pop();
-  *orig = (ucell_t)newCodeSpacePtr;
+  *orig = (ucell_t)pHere;
 #ifdef DEBUG
-  debugValue(newCodeSpacePtr);
+  debugValue(pHere);
 #endif
 }
 
@@ -1612,43 +1736,43 @@ PROGMEM char until_str[] = "until";
 // Compilation: (C: dest -- )
 // Run-Time: ( x -- )
 static void _until(void) {
-  *newCodeSpacePtr++ = ZJUMP_IDX;
+  *(cell_t*)pHere = ZJUMP_IDX;
 #ifdef DEBUG
-  debugXT(newCodeSpacePtr - 1);
+  debugXT(pHere);
 #endif
-  *newCodeSpacePtr++ = pop();
+  pHere += sizeof(cell_t);
+  *(cell_t*)pHere = pop();
 #ifdef DEBUG
-  debugValue(newCodeSpacePtr - 1);
+  debugXT(pHere);
 #endif
+  pHere += sizeof(cell_t);
 }
 
 PROGMEM char variable_str[] = "variable";
 // ( "<spaces>name" -- )
 // Parse name delimited by a space. Create a definition for name with the
-// execution semantics defined below. reserve on cell of data space at an 
+// execution semantics defined below. reserve one cell of data space at an 
 // alined address.
 // name Execution: ( -- a-addr )
 // a-addr is the address of the reserved cell. A program is resposible for
 // initializing the contents of a reserved cell.
 static void _variable(void) {
-  openEntry();
-  *newCodeSpacePtr++ = (cell_t)LITERAL_IDX;
-#ifdef DEBUG
-  debugXT(newCodeSpacePtr - 1);
-#endif
-  newHerePtr = (uint8_t*)((int16_t)(newHerePtr + 1) & -2);
-  if (newHerePtr - &dataSpace[0] < DATA_SIZE) {
-    *newCodeSpacePtr++ = (cell_t)newHerePtr;
-#ifdef DEBUG
-    debugXT(newCodeSpacePtr - 1);
-#endif
-    newHerePtr += sizeof(cell_t);
+  if (flags & EXECUTE) {
+    push((cell_t)ip++);    
   } else {
-    push(-9); 
-    _throw();
-    return;
+    openEntry();
+    *(cell_t*)pHere = (cell_t)VARIABLE_IDX;
+#ifdef DEBUG
+    debugXT(pHere);
+#endif
+    pHere += sizeof(cell_t);
+    *(cell_t*)pHere = 0;
+#ifdef DEBUG
+    debugXT(pHere);
+#endif
+    pHere += sizeof(cell_t);
+    closeEntry();
   }
-  closeEntry();
 }
 
 PROGMEM char while_str[] = "while";
@@ -1659,15 +1783,17 @@ static void _while(void) {
   ucell_t dest;
   ucell_t orig;
   dest = pop();
-  *newCodeSpacePtr++ = ZJUMP_IDX;
+  *(cell_t*)pHere = ZJUMP_IDX;
 #ifdef DEBUG
-  debugXT(newCodeSpacePtr - 1);
+  debugXT(pHere);
 #endif
-  orig = (cell_t)newCodeSpacePtr;
-  *newCodeSpacePtr++ = 0;
+  pHere += sizeof(cell_t);
+  orig = (cell_t)pHere;
+  *(cell_t*)pHere = 0;
 #ifdef DEBUG
-  debugXT(newCodeSpacePtr - 1);
+  debugXT(pHere);
 #endif
+  pHere += sizeof(cell_t);
   push(orig);
   push(dest);
 }
@@ -1678,15 +1804,15 @@ PROGMEM char word_str[] = "word";
 static void _word(void) {
   uint8_t* start;
   cDelimiter = (char)pop();
-  start = herePtr++;
+  start = pHere++;
   while(cpToIn <= cpSourceEnd) {
     if (*cpToIn == cDelimiter || *cpToIn == 0) {
-      *start = (herePtr - start) - 1;     // write the length byte
-      herePtr = start;                    // reset herePtr (transient memory)
+      *start = (pHere - start) - 1;     // write the length byte
+      pHere = start;                    // reset pHere (transient memory)
       push((cell_t)start);                // push the c-addr onto the stack
       cpToIn++;
       break;      
-    } else *herePtr++ = *cpToIn++;
+    } else *pHere++ = *cpToIn++;
   }
   cDelimiter = ' ';
 }
@@ -1704,19 +1830,26 @@ PROGMEM char left_bracket_str[] = "[";
 // Execution: ( -- )
 // Enter interpretaion state. [ is an immediate word.
 static void _left_bracket(void) {
-//  flags &= ~COMPILE;
   state = FALSE;
 }
 
 PROGMEM char bracket_tick_str[] = "[']";
-// Interpretation: undefined
+// Interpretation: Interpretation semantics for this word are undefined.
 // Compilation: ( "<space>name" -- )
+// Skip leading space delimiters. Parse name delimited by a space. Find name. 
+// Append the run-time semantics given below to the current definition.
+// An ambiguous condition exist if name is not found.
 // Run-Time: ( -- xt )
+// Place name's execution token xt on the stack. The execution token returned 
+// by the compiled phrase "['] X" is the same value returned by "' X" outside
+// of compilation state.
 static void _bracket_tick(void) {
-  getToken();
+  getToken(); 
   if(isWord(cTokenBuffer)) {
-    *newCodeSpacePtr++ = (cell_t)LITERAL_IDX;
-    *newCodeSpacePtr++ = w;
+    *(cell_t*)pHere = LITERAL_IDX;
+    pHere += sizeof(cell_t);
+    *(cell_t*)pHere = w;
+    pHere += sizeof(cell_t);
   } else {
     push(-13);
     _throw();
@@ -1725,13 +1858,18 @@ static void _bracket_tick(void) {
 }
 
 PROGMEM char bracket_char_str[] = "[char]";
-// Interpretation: undefined
+// Interpretation: Interpretation semantics for this word are undefined.
 // Compilation: ( "<space>name" -- )
+// Skip leading spaces delimiters. Parse name delimited by a space. Append
+// the run-time semantics given below to the current definition.
 // Run-Time: ( -- char )
+// Place char, the value of the first character of name, on the stack.
 static void _bracket_char(void) {
   if(getToken()) {
-    *newCodeSpacePtr++ = LITERAL_IDX;
-    *newCodeSpacePtr++ = cTokenBuffer[0];
+    *(cell_t*)pHere = LITERAL_IDX;
+    pHere += sizeof(cell_t);
+    *(cell_t*)pHere = cTokenBuffer[0];
+    pHere += sizeof(cell_t);
   } else {
     push(-32);
     _throw();
@@ -1742,7 +1880,6 @@ PROGMEM char right_bracket_str[] = "]";
 // ( -- )
 // Enter compilation state.
 static void _right_bracket(void) {
-//  flags |= COMPILE;
   state = TRUE;
 }
 
@@ -1796,7 +1933,6 @@ static void _throw(void) {
   } while(tableCode);
   tos = -1;                       // Clear the stack.
   _quit();
-//  flags &= ~COMPILE;
   state = FALSE;
 }  
 #endif
@@ -1833,6 +1969,8 @@ PROGMEM char words_str[] = "words";
 static void _words(void) { // --
   uint8_t count = 0;
   uint8_t index = 0;
+  uint8_t length = 0;
+  char* pChar;
   
   while (pgm_read_word(&(flashDict[index].name))) {
       if (count > 70) {
@@ -1845,6 +1983,7 @@ static void _words(void) { // --
       }
       index++;
   }
+  
   pUserEntry = pLastUserEntry;
   while(pUserEntry) {
     if (count > 70) {
@@ -1962,6 +2101,9 @@ flashEntry_t flashDict[] PROGMEM = {
     { leave_sys_str,      _leave_sys,       SMUDGE },
     { plus_loop_sys_str,  _plus_loop_sys,   SMUDGE },
     { evaluate_str,       _evaluate,        NORMAL },
+    { s_quote_str,        _s_quote,         IMMEDIATE + COMP_ONLY },
+    { dot_quote_str,      _dot_quote,       IMMEDIATE + COMP_ONLY },
+    { variable_str,       _variable,        NORMAL },
     
     /*****************************************************/
     /* Order does not matter after here                  */
@@ -1979,10 +2121,9 @@ flashEntry_t flashDict[] PROGMEM = {
     { plus_str,           _plus,            NORMAL },
     { plus_store_str,     _plus_store,      NORMAL },
     { plus_loop_str,      _plus_loop,       IMMEDIATE + COMP_ONLY },
-    { comma_str,          _comma,           IMMEDIATE },
+    { comma_str,          _comma,           NORMAL },
     { minus_str,          _minus,           NORMAL },
     { dot_str,            _dot,             NORMAL },
-    { dot_quote_str,      _dot_quote,       IMMEDIATE + COMP_ONLY },
     { slash_str,          _slash,           NORMAL },
     { slash_mod_str,      _slash_mod,       NORMAL },
     { zero_less_str,      _zero_less,       NORMAL },
@@ -2071,7 +2212,6 @@ flashEntry_t flashDict[] PROGMEM = {
     { repeat_str,         _repeat,          IMMEDIATE + COMP_ONLY },
     { rot_str,            _rot,             NORMAL },
     { rshift_str,         _rshift,          NORMAL },
-    { s_quote_str,        _s_quote,         IMMEDIATE + COMP_ONLY },
     { s_to_d_str,         _s_to_d,          NORMAL },
     { sign_str,           _sign,            NORMAL },
     { sm_slash_rem_str,   _sm_slash_rem,    NORMAL },
@@ -2087,7 +2227,6 @@ flashEntry_t flashDict[] PROGMEM = {
     { um_slash_mod_str,   _um_slash_mod,    NORMAL },
     { unloop_str,         _unloop,          NORMAL + COMP_ONLY },
     { until_str,          _until,           IMMEDIATE + COMP_ONLY },
-    { variable_str,       _variable,        NORMAL },
     { while_str,          _while,           IMMEDIATE + COMP_ONLY },
     { word_str,           _word,            NORMAL },
     { xor_str,            _xor,             NORMAL },
