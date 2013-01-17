@@ -18,7 +18,7 @@
 /**  GNU General Public License for more details.                            **/
 /**                                                                          **/
 /**  You should have received a copy of the GNU General Public License       **/
-/**  along with Foobar.  If not, see <http://www.gnu.org/licenses/>.         **/
+/**  along with YAFFA.  If not, see <http://www.gnu.org/licenses/>.         **/
 /**                                                                          **/
 /******************************************************************************/
 /**                                                                          **/
@@ -32,7 +32,7 @@
 /**  library.                                                                **/
 /**  YAFFA uses two dictionaries, one for built in words and is stored in    **/
 /**  flash memory, and the other for user defined words, that is found in    **/
-/**  RAM. 
+/**  RAM.                                                                    **/
 /**                                                                          **/
 /******************************************************************************/
 /**                                                                          **/
@@ -45,6 +45,8 @@
 /**                                                                          **/
 /**      Done Fix ." to put the string inline with the code definition.      **/
 /**      Done Fix .ABORT to put the string inline with the code definition.  **/
+/**      Change JUMP, ZJUMP, and NZJUMP to use relative addressing, not      **/
+/**      absolute addresses.                                                 **/
 /**      Fix ENVIRONMENT? Query to take a string refeference from the stack. **/
 /**      Fix the outerinterpreter to use FIND instead of isWord              **/
 /**      Fix Serial.Print(w, HEX) from displaying negitave numbers as 32 bits**/
@@ -59,7 +61,7 @@
 
 #include <EEPROM.h>
 #include <avr/pgmspace.h>
-#include "Yaffa.h"
+#include "YAFFA.h"
 #include "Error_Codes.h"
 
 /******************************************************************************/
@@ -341,7 +343,6 @@ void interpreter(void) {
           *(cell_t*)pHere = w;
           pHere += sizeof(cell_t);
 #ifdef DEBUG
-//          debugXT((cell_t*)((cell_t)pHere - sizeof(cell_t)));
           debugXT((cell_t*)(pHere - sizeof(cell_t)));
 #endif
         }
@@ -441,9 +442,10 @@ uint8_t isWord(char* addr) {
     if (strcmp(pUserEntry->name, addr) == 0) {
       wordFlags = pUserEntry->flags;
       length = strlen(pUserEntry->name);
-      w = (cell_t)pUserEntry + length + 4;
+//      w = (cell_t)pUserEntry + length + 4;
       // Align the address in w
-      ALIGN(w);
+//      ALIGN(w);
+      w = (cell_t)pUserEntry->cfa;
       return(1);
     }
     pUserEntry = (userEntry_t*)pUserEntry->prevEntry;
@@ -532,16 +534,16 @@ void openEntry(void) {
   pNewUserEntry = (userEntry_t*)pHere;
   if (pLastUserEntry == NULL)                  
     pNewUserEntry->prevEntry = 0;              // Initialize User Dictionary
-  else pNewUserEntry->prevEntry = (addr_t*)pLastUserEntry;
+  else pNewUserEntry->prevEntry = (addr_t)pLastUserEntry;
   getToken();
   pHere = (uint8_t*)pNewUserEntry->name;
   do {
     *pHere++ = cTokenBuffer[index++];
   } while (cTokenBuffer[index] != NULL);
   *pHere++ = NULL;
-   
-  // Align the HERE
+  // Align HERE
   ALIGN_P(pHere);
+  pNewUserEntry->cfa = (addr_t)pHere;
   pCodeStart = (cell_t*)pHere;
 
 #ifdef DEBUG
@@ -700,6 +702,30 @@ uint8_t f_strcmp(char* addr1, char* addr2) {
 
 // String Copy, Both strings in RAM
 uint8_t f_strcpy(char* addr1, char* addr2) {
+}
+
+/******************************************************************************/
+/** Functions for decompiling words                                          **/
+/******************************************************************************/
+char* xtToName(cell_t xt) {
+  uint8_t index = 0;
+  uint8_t length = 0;
+  
+  pUserEntry = pLastUserEntry;
+
+  // Second Serarch through the flash Dictionary
+  if (xt < 256) {
+    serial_print_P((char*) pgm_read_word(&(flashDict[xt-1].name)));
+  } else {
+    while(pUserEntry) {
+      if (pUserEntry->cfa == xt) {
+        Serial.print(pUserEntry->name);
+        break;
+      }
+      pUserEntry = (userEntry_t*)pUserEntry->prevEntry;
+    }
+  }
+  return 0;
 }
 
 /******************************************************************************/

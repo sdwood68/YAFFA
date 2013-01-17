@@ -17,7 +17,7 @@
 /**  GNU General Public License for more details.                            **/
 /**                                                                          **/
 /**  You should have received a copy of the GNU General Public License       **/
-/**  along with Foobar.  If not, see <http://www.gnu.org/licenses/>.         **/
+/**  along with YAFFA.  If not, see <http://www.gnu.org/licenses/>.         **/
 /**                                                                          **/
 /******************************************************************************/
 
@@ -93,13 +93,15 @@ typedef uint32_t udcell_t;
 typedef uint16_t addr_t;
 
 /******************************************************************************/
-/**  User Dictionary is stored in name space.                                **/
+/**  User Dictionary Header                                                  **/
 /******************************************************************************/
-typedef struct  {             // structure of the user dictionary
-  addr_t*      prevEntry;     // Pointer to the previous entry
+typedef struct  {            // structure of the user dictionary
+  addr_t       prevEntry;    // Pointer to the previous entry
+  addr_t       cfa;          // Code Field Address
+//  addr_t       pfa;          // Parameter Field Address
   uint8_t      flags;        // Holds the length of the following name 
-                              // and any flags.
-  char         name[];        // Variable length name
+                             // and any flags.
+  char         name[];       // Variable length name
 } userEntry_t;
 
 /******************************************************************************/

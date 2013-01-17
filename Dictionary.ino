@@ -17,7 +17,7 @@
 /**  GNU General Public License for more details.                            **/
 /**                                                                          **/
 /**  You should have received a copy of the GNU General Public License       **/
-/**  along with Foobar.  If not, see <http://www.gnu.org/licenses/>.         **/
+/**  along with YAFFA.  If not, see <http://www.gnu.org/licenses/>.         **/
 /**                                                                          **/
 /******************************************************************************/
 const char not_done_str[] PROGMEM = " NOT Implemented Yet \n\r";
@@ -798,8 +798,8 @@ static void _bl(void) {
 PROGMEM char c_store_str[] = "c!";
 // ( char c-addr -- )
 static void _c_store(void) {
-  addr_t *address = (addr_t*)pop();
-  *address = (char)pop();
+  volatile uint8_t* address = (uint8_t*)pop();
+  *address = (uint8_t)pop();
 }
 
 PROGMEM char c_comma_str[] = "c,";
@@ -811,8 +811,8 @@ static void _c_comma(void) {
 PROGMEM char c_fetch_str[] = "c@";
 // ( c-addr -- char )
 static void _c_fetch(void) {
-  addr_t *address = (addr_t*)pop();
-  push((char) *address);
+  volatile uint8_t *address = (uint8_t*)pop();
+  push(*address);
 }
 
 PROGMEM char cell_plus_str[] = "cell+";
@@ -898,8 +898,8 @@ static void _create(void) {
   openEntry();
   *(cell_t*)pHere = LITERAL_IDX;
   pHere += sizeof(cell_t);
-  *(cell_t*)pHere = (cell_t)pHere + 3 * sizeof(cell_t); // Location of Data Field at the 
-                                                // end of the definition.
+  // Location of Data Field at the end of the definition.
+  *(cell_t*)pHere = (cell_t)pHere + 3 * sizeof(cell_t); 
   pHere += sizeof(cell_t);
   *(cell_t*)pHere = EXIT_IDX;   // Store an extra exit reference so 
                                 // that it can be replace by a 
@@ -1998,6 +1998,43 @@ static void _words(void) { // --
   }
   Serial.println();
 }
+
+PROGMEM char dump_str[] = "dump";
+// ( addr u -- )
+// Display the contents of u conseutive address starting at addr. The format of 
+// the display is implementation dependent. 
+// DUMP may be implemented using pictured numeric output words. Consequently, 
+// its use may corrupt the transient region identified by #>.
+static void _dump(void) { 
+  uint8_t len = (uint8_t)pop();
+  addr_t addr_start = (addr_t)pop();
+  addr_t addr_end = addr_start;
+  addr_end += len;
+  addr_start = addr_start & 0xFFF0;
+  
+  volatile uint8_t* addr = (uint8_t*)addr_start;
+  
+  while (addr < (uint8_t*)addr_end) {
+    serial_print_P(PSTR("\r\n$"));
+    if (addr < (uint8_t*)0x10) serial_print_P(PSTR("0"));
+    if (addr < (uint8_t*)0x100) serial_print_P(PSTR("0"));
+    Serial.print((uint16_t)addr, HEX);
+    serial_print_P(PSTR(" "));
+    for (uint8_t i = 0; i < 16; i++) {
+      if (*addr < 0x10) serial_print_P(PSTR("0"));
+      Serial.print(*addr++, HEX);
+      serial_print_P(PSTR(" "));
+    }
+    serial_print_P(PSTR("\t"));
+    addr -= 16;
+    for (uint8_t i = 0; i < 16; i++) {
+      if (*addr < 127 && *addr > 31) 
+      Serial.print((char)*addr);
+      else serial_print_P(PSTR("."));
+      addr++;  
+    }
+  }
+}
 #endif
 
 /*******************************************************************************/
@@ -2076,6 +2113,11 @@ static void _analogRead(void) {
 PROGMEM char analogWrite_str[] = "analogWrite";
 static void _analogWrite(void) {
   analogWrite(pop(), pop());
+}
+
+PROGMEM char to_name_str[] = ">name";
+static void _toName(void) {
+  xtToName(pop());
 }
 #endif
 
@@ -2255,6 +2297,7 @@ flashEntry_t flashDict[] PROGMEM = {
 #ifdef TOOLS_SET
     { dot_s_str,          _dot_s,           NORMAL },
     { words_str,          _words,           NORMAL },
+    { dump_str,           _dump,            NORMAL },
 #endif
 
 #ifdef SEARCH_SET
@@ -2271,6 +2314,7 @@ flashEntry_t flashDict[] PROGMEM = {
     { pinRead_str,        _pinRead,         NORMAL },
     { analogRead_str,     _analogRead,      NORMAL },
     { analogWrite_str,    _analogWrite,     NORMAL },
+    { to_name_str,        _toName,          NORMAL },
 #endif
 
 #ifdef EN_EEPROM_OPS
