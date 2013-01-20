@@ -43,13 +43,15 @@
 /**                                                                          **/
 /**  THINGS TO FIX:                                                          **/
 /**                                                                          **/
-/**      Done Fix ." to put the string inline with the code definition.      **/
-/**      Done Fix .ABORT to put the string inline with the code definition.  **/
-/**      Change JUMP, ZJUMP, and NZJUMP to use relative addressing, not      **/
-/**      absolute addresses.                                                 **/
-/**      Fix ENVIRONMENT? Query to take a string refeference from the stack. **/
-/**      Fix the outerinterpreter to use FIND instead of isWord              **/
-/**      Fix Serial.Print(w, HEX) from displaying negitave numbers as 32 bits**/
+/**    Done Fix ." to put the string inline with the code definition.        **/
+/**    Done Fix .ABORT to put the string inline with the code definition.    **/
+/**    Done Change JUMP, ZJUMP, and NZJUMP to use relative addressing,       **/
+/**         not absolute addresses.                                          **/
+/**    Done Added the Word SEE                                               **/
+/**    How to reduce the code used for TICK, WORD, and FIND?                 **/
+/**    Fix the outerinterpreter to use FIND instead of isWord                **/
+/**    Fix Serial.Print(w, HEX) from displaying negitave numbers as 32 bits  **/
+/**    Fix ENVIRONMENT? Query to take a string refeference from the stack.   **/
 /**                                                                          **/
 /******************************************************************************/
 
@@ -86,12 +88,17 @@ char cInputBuffer[BUFFER_SIZE]; // Input Buffer that gets parsed
 char cTokenBuffer[TOKEN_SIZE];  // Stores Single Parsed token to be acted on
 
 /******************************************************************************/
-/** Terminal Constants                                                       **/
+/** Common Strings & Terminal Constants                                                       **/
 /******************************************************************************/
 const char prompt_str[] PROGMEM = ">> ";
 const char compile_prompt_str[] PROGMEM = "|  ";
 const char ok_str[] PROGMEM = " OK";
 const char charset[] PROGMEM = "0123456789abcdef";
+const char sp_str[] PROGMEM = " ";
+const char tab_str[] PROGMEM = "\t";
+const char hexidecimal_str[] PROGMEM = "$";
+const char binary_str[] PROGMEM = "%";
+const char zero_str[] PROGMEM = "0";
 
 /******************************************************************************/
 /**  Stacks and Associated Registers                                         **/
@@ -136,7 +143,7 @@ int8_t errorCode = 0;
 /******************************************************************************/
 /**  Forth Space (Name, Code and Data Space) and Associated Registers        **/
 /******************************************************************************/
-char* pnoPtr;                // Pictured Numeric Output Pointer
+char* pPNO;                  // Pictured Numeric Output Pointer
 uint8_t forthSpace[FORTH_SIZE]; // Reserve a block on RAM for the forth environment
 uint8_t* pHere;              // HERE, points to the next free position in
                              // Forth Space
@@ -179,26 +186,27 @@ void setup(void) {
   }
   Serial.println(w);
 
-  serial_print_P(PSTR(" Input Buffer: Starts at 0x"));
+  serial_print_P(PSTR(" Input Buffer: Starts at $"));
   Serial.print((int)&cInputBuffer[0], HEX);
-  serial_print_P(PSTR(", Ends at 0x"));
+  serial_print_P(PSTR(", Ends at $"));
   Serial.println((int)&cInputBuffer[BUFFER_SIZE] - 1, HEX);
 
-  serial_print_P(PSTR(" Token Buffer: Starts at 0x"));
+  serial_print_P(PSTR(" Token Buffer: Starts at $"));
   Serial.print((int)&cTokenBuffer[0], HEX);
-  serial_print_P(PSTR(", Ends at 0x"));
+  serial_print_P(PSTR(", Ends at $"));
   Serial.println((int)&cTokenBuffer[TOKEN_SIZE] - 1, HEX);
 
   pHere = &forthSpace[0];
   pOldHere = pHere;
-  serial_print_P(PSTR(" Forth Space: Starts at 0x"));
+  serial_print_P(PSTR(" Forth Space: Starts at $"));
   Serial.print((int)&forthSpace[0], HEX);
-  serial_print_P(PSTR(", Ends at 0x"));
+  serial_print_P(PSTR(", Ends at $"));
   Serial.println((int)&forthSpace[FORTH_SIZE] - 1, HEX);
 
   mem = freeMem();
+  serial_print_P(sp_str);
   Serial.print(mem);
-  serial_print_P(PSTR(" (0x"));
+  serial_print_P(PSTR(" ($"));
   Serial.print(mem, HEX);  
   serial_print_P(PSTR(") bytes free\r\n"));
 
@@ -442,9 +450,6 @@ uint8_t isWord(char* addr) {
     if (strcmp(pUserEntry->name, addr) == 0) {
       wordFlags = pUserEntry->flags;
       length = strlen(pUserEntry->name);
-//      w = (cell_t)pUserEntry + length + 4;
-      // Align the address in w
-//      ALIGN(w);
       w = (cell_t)pUserEntry->cfa;
       return(1);
     }
@@ -535,28 +540,30 @@ void openEntry(void) {
   if (pLastUserEntry == NULL)                  
     pNewUserEntry->prevEntry = 0;              // Initialize User Dictionary
   else pNewUserEntry->prevEntry = (addr_t)pLastUserEntry;
-  getToken();
+  if(!getToken()) {
+    push(-16);
+    _throw();
+  }
   pHere = (uint8_t*)pNewUserEntry->name;
   do {
     *pHere++ = cTokenBuffer[index++];
   } while (cTokenBuffer[index] != NULL);
   *pHere++ = NULL;
-  // Align HERE
   ALIGN_P(pHere);
   pNewUserEntry->cfa = (addr_t)pHere;
   pCodeStart = (cell_t*)pHere;
 
 #ifdef DEBUG
-  serial_print_P(PSTR("\r\nNEW ENTRY @ "));
-  Serial.print((uint16_t)pNewUserEntry);
-  serial_print_P(PSTR("\r\n  NAME Starts @ "));
-  Serial.print((uint16_t)pNewUserEntry->name);
+  serial_print_P(PSTR("\r\nNEW ENTRY @ $"));
+  Serial.print((uint16_t)pNewUserEntry, HEX);
+  serial_print_P(PSTR("\r\n  NAME Starts @ $"));
+  Serial.print((uint16_t)pNewUserEntry->name, HEX);
   serial_print_P(PSTR(" = "));
   Serial.print(pNewUserEntry->name);
-  serial_print_P(PSTR("\r\n  Previous Entry @ "));
-  Serial.print((uint16_t)pNewUserEntry->prevEntry);
-  serial_print_P(PSTR("\r\n  Code Starts @ "));
-  Serial.print((uint16_t)pHere);
+  serial_print_P(PSTR("\r\n  Previous Entry @ $"));
+  Serial.print((uint16_t)pNewUserEntry->prevEntry, HEX);
+  serial_print_P(PSTR("\r\n  Code Starts @ $"));
+  Serial.print((uint16_t)pHere, HEX);
 #endif
 }
 
@@ -590,7 +597,8 @@ void push(short value) {
     if (tos >= 0) {
       for (char i = 0; i < depth ; i++) {
         Serial.print(stack[i]);
-        Serial.print(" ");
+        serial_print_P(sp_str);
+//        Serial.print(" ");
       }
     }
 #endif
@@ -610,7 +618,8 @@ void rPush(short value) {
     if (rtos >= 0) {
       for (char i = 0; i < (rtos + 1) ; i++) {
         Serial.print(rStack[i]);
-        Serial.print(" ");
+//        Serial.print(" ");
+        serial_print_P(sp_str);
       }
     }
 #endif
@@ -629,7 +638,8 @@ cell_t pop(void) {
     if (tos >= 0) {
       for (char i = 0; i < (tos + 1) ; i++) {
         Serial.print(stack[i]);
-        Serial.print(" ");
+//        Serial.print(" ");
+        serial_print_P(sp_str);
       }
     }
     return(stack[tos+1]);
@@ -652,7 +662,8 @@ cell_t rPop(void) {
     if (rtos >= 0) {
       for (char i = 0; i < (rtos + 1) ; i++) {
         Serial.print(rStack[i]);
-        Serial.print(" ");
+//        Serial.print(" ");
+        serial_print_P(sp_str);
       }
     }
     return(rStack[rtos+1]);
@@ -674,15 +685,18 @@ void displayValue(void) {
     case 10: Serial.print(w, DEC);
       break;
     case 16:
-      Serial.print("0x"); 
+      serial_print_P(hexidecimal_str); 
       Serial.print(w, HEX);
       break;
     case 8:  Serial.print(w, OCT);
       break;
-    case 2:  Serial.print(w, BIN);
+    case 2:  
+      serial_print_P(binary_str); 
+      Serial.print(w, BIN);
       break;
   }
-  Serial.print(" ");
+//  Serial.print(" ");
+  serial_print_P(sp_str);
 }
 
 uint8_t serial_print_P(PGM_P ptr) {
@@ -733,22 +747,22 @@ char* xtToName(cell_t xt) {
 /******************************************************************************/
 #ifdef DEBUG
 void debugXT(void* ptr) {
-  serial_print_P(PSTR("\r\n  Addr: "));
-  Serial.print((uint16_t)ptr);
+  serial_print_P(PSTR("\r\n  Addr: $"));
+  Serial.print((uint16_t)ptr, HEX);
   serial_print_P(PSTR(" => XT: "));
   Serial.print(*(ucell_t*)ptr);
 }
 
 void debugValue(void* ptr) {
-  serial_print_P(PSTR("\r\n  Addr: "));
-  Serial.print((uint16_t)ptr);
+  serial_print_P(PSTR("\r\n  Addr: $"));
+  Serial.print((uint16_t)ptr, HEX);
   serial_print_P(PSTR(" => VALUE: "));
-  Serial.print(*(uint16_t*)ptr);
+  Serial.print(*(int16_t*)ptr);
 }
 
 void debugNewIP(void) {
-  serial_print_P(PSTR("\r\n  New IP: "));
-  Serial.print((ucell_t)ip);
+  serial_print_P(PSTR("\r\n  New IP: $"));
+  Serial.print((ucell_t)ip, HEX);
 }
 
 #endif

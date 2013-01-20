@@ -127,17 +127,16 @@ extern flashEntry_t flashDict[];        // forward reference
 #define TYPE_IDX           3
 #define JUMP_IDX           4
 #define ZJUMP_IDX          5
-#define NZJUMP_IDX         6
-#define SUBROUTINE_IDX     7
-#define THROW_IDX          8
-#define DO_SYS_IDX         9
-#define LOOP_SYS_IDX       10
-#define LEAVE_SYS_IDX      11
-#define PLUS_LOOP_SYS_IDX  12
-#define EXECUTE_IDX        13
-#define S_QUOTE_IDX        14
-#define DOT_QUOTE_IDX      15
-#define VARIABLE_IDX       16
+#define SUBROUTINE_IDX     6
+#define THROW_IDX          7
+#define DO_SYS_IDX         8
+#define LOOP_SYS_IDX       9
+#define LEAVE_SYS_IDX      10
+#define PLUS_LOOP_SYS_IDX  11
+#define EXECUTE_IDX        12
+#define S_QUOTE_IDX        13
+#define DOT_QUOTE_IDX      14
+#define VARIABLE_IDX       15
 
 /*****************************************************************************/
 /** Function Prototypes                                                     **/

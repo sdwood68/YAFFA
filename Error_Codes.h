@@ -118,7 +118,7 @@ exception_t exception[] PROGMEM = {
   { -10,   error_10_str      },
   { -13,   error_13_str      },
   { -14,   error_14_str      },
-  { -16,   error_18_str      },
+  { -16,   error_16_str      },
   { -18,   error_18_str      },
   { -22,   error_22_str      },
   { -23,   error_23_str      },

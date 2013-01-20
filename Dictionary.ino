@@ -27,7 +27,7 @@ const char not_done_str[] PROGMEM = " NOT Implemented Yet \n\r";
 /******************************************************************************/
 PROGMEM char jump_str[] = "jump";
 static void _jump(void) {
-  ip = (cell_t*)*ip;
+  ip = (cell_t*)((cell_t)ip + *ip);
 #ifdef DEBUG
   debugNewIP();
 #endif
@@ -35,16 +35,10 @@ static void _jump(void) {
 
 PROGMEM char zjump_str[] = "zjump";
 static void _zjump(void) {
-  if(!pop()) ip = (cell_t*)*ip;
-  else ip++;
 #ifdef DEBUG
-  debugNewIP();
+  debugValue(ip);
 #endif
-}
-
-PROGMEM char nzjump_str[] = "nzjump";
-static void _nzjump(void) {
-  if(pop()) ip = (cell_t*)*ip;
+  if(!pop()) ip = (cell_t*)((cell_t)ip + *ip);
   else ip++;
 #ifdef DEBUG
   debugNewIP();
@@ -163,15 +157,15 @@ static void _number_sign(void) {
   Serial.println(ud);
   Serial.println(sizeof(ucell_t));
 #endif
-  *--pnoPtr = pgm_read_byte(&charset[ud % base]);
+  *--pPNO = pgm_read_byte(&charset[ud % base]);
   ud /= base;
 #ifdef DEBUG
   serial_print_P(PSTR("  new ud = "));
   Serial.println(ud);
-  serial_print_P(PSTR("  pnoPtr = 0x"));
-  Serial.print((addr_t)pnoPtr, HEX);
+  serial_print_P(PSTR("  pPNO = $"));
+  Serial.print((addr_t)pPNO, HEX);
   serial_print_P(PSTR(" = "));
-  Serial.println((char)*pnoPtr);
+  Serial.println((char)*pPNO);
 #endif
   push((ucell_t)ud);
   push((ucell_t)(ud >> sizeof(ucell_t)*8));
@@ -184,8 +178,8 @@ PROGMEM char number_sign_gt_str[] = "#>";
 // characters within the string.
 static void _number_sign_gt(void) {
   _two_drop(); 
-  push((cell_t)pnoPtr);
-  push((cell_t)strlen(pnoPtr));
+  push((cell_t)pPNO);
+  push((cell_t)strlen(pPNO));
   flags &= ~NUM_PROC;
 }
 
@@ -196,16 +190,16 @@ static void _number_sign_s(void) {
   ud = (udcell_t)pop() << sizeof(ucell_t)*8;
   ud += (udcell_t)pop();
   while (ud) {
-      *--pnoPtr = pgm_read_byte(&charset[ud % base]);
+      *--pPNO = pgm_read_byte(&charset[ud % base]);
       ud /= base;
   }
 #ifdef DEBUG
   serial_print_P(PSTR("  ud = "));
   Serial.println(ud);
-  serial_print_P(PSTR("  pnoPtr = 0x"));
-  Serial.print((addr_t)pnoPtr, HEX);
+  serial_print_P(PSTR("  pPNO = $"));
+  Serial.print((addr_t)pPNO, HEX);
   serial_print_P(PSTR(" = "));
-  Serial.println((char)*pnoPtr);
+  Serial.println((char)*pPNO);
 #endif
   push((ucell_t)ud);
   push((ucell_t)(ud >> sizeof(ucell_t)*8));
@@ -223,7 +217,7 @@ static void _tick(void) {
       return;
     }
   }
-  push(-13);
+  push(-16);
   _throw();
 }
 
@@ -370,7 +364,10 @@ static void _dot_quote(void) {
   char length;
   if (state) {
     cDelimiter = '"';
-    getToken();
+    if(!getToken()) {
+      push(-16);
+      _throw();
+    }
     length = strlen(cTokenBuffer);
     *(cell_t*)pHere = (cell_t)DOT_QUOTE_IDX;
 #ifdef DEBUG
@@ -378,9 +375,9 @@ static void _dot_quote(void) {
 #endif
     pHere += sizeof(cell_t);
 #ifdef DEBUG
-    serial_print_P(PSTR("\r\n  String @ "));
+    serial_print_P(PSTR("\r\n  String @ $"));
     char* str = (char*)pHere;
-    Serial.print((ucell_t)str);
+    Serial.print((ucell_t)str, HEX);
 #endif
     for (uint8_t i = 0; i < length; i++) {
       *(char*)pHere++ = cTokenBuffer[i];
@@ -571,11 +568,11 @@ PROGMEM char lt_number_sign_str[] = "<#";
 // ( -- )
 // Initialize the pictured numeric output conversion process.
 static void _lt_number_sign(void) { 
-  pnoPtr = (char*)pHere + HOLD_SIZE + 1;
-  *pnoPtr = NULL;
+  pPNO = (char*)pHere + HOLD_SIZE + 1;
+  *pPNO = NULL;
 #ifdef DEBUG
-  Serial.print("pnoPtr = 0x");
-  Serial.println((addr_t)pnoPtr, HEX);
+  Serial.print("pPNO = $");
+  Serial.println((addr_t)pPNO, HEX);
 #endif
   flags |= NUM_PROC;
 }
@@ -629,7 +626,7 @@ PROGMEM char to_r_str[] = ">r";
 static void _to_r(void) {
 #ifdef DEBUG
   cell_t temp = pop();
-  serial_print_P(PSTR("  Moving 0x"));
+  serial_print_P(PSTR("  Moving $"));
   Serial.print(temp, HEX);
   serial_print_P(PSTR(" To Return Stack\r\n"));
   rPush(temp);
@@ -687,7 +684,7 @@ static void _abort_quote(void) {
   debugXT(pHere);
 #endif
   pHere += sizeof(cell_t);
-  push((cell_t)pHere);
+  push((cell_t)pHere);  // Push the address for our origin
   *(cell_t*)pHere = 0;
 #ifdef DEBUG
   debugXT(pHere);
@@ -710,7 +707,7 @@ static void _abort_quote(void) {
 #endif
   pHere += sizeof(cell_t);
   cell_t* orig = (cell_t*)pop();
-  *orig = (ucell_t)pHere;
+  *orig = (cell_t)pHere - (cell_t)orig;
 #ifdef DEBUG
   debugValue(pHere);
 #endif
@@ -785,7 +782,7 @@ PROGMEM char begin_str[] = "begin";
 // Continue execution.
 static void _begin(void) {
   push((cell_t)pHere);
-  pHere += sizeof(cell_t);
+  *(cell_t*)pHere = 0;
 }
 
 PROGMEM char bl_str[] = "bl";
@@ -835,7 +832,7 @@ PROGMEM char char_str[] = "char";
 static void _char(void) {
   if(getToken()) push(cTokenBuffer[0]);
   else {
-    push(-32);
+    push(-16);
     _throw();
   }
 }
@@ -946,7 +943,7 @@ static void _does(void) {
   debugXT(pHere);
 #endif
   pHere += sizeof(cell_t);
-  // Store location for subroutine call
+  // Store location for a subroutine call
   *(cell_t*)pHere = (cell_t)pHere + 2 * sizeof(cell_t);  
 #ifdef DEBUG
   debugXT(pHere);
@@ -987,7 +984,7 @@ static void _else(void) {
   pHere += sizeof(cell_t);
   push((cell_t)pHere);
   pHere += sizeof(cell_t);
-  *orig = (ucell_t)pHere;
+  *orig = (cell_t)pHere - (cell_t)orig;
 #ifdef DEBUG
   debugValue(orig);
 #endif
@@ -1209,7 +1206,7 @@ PROGMEM char hold_str[] = "hold";
 // add char to the beginning of the pictured numeric output string.
 static void _hold(void) {
   if (flags & NUM_PROC) {
-    *--pnoPtr = (char) pop();
+    *--pPNO = (char) pop();
   }
 }
 
@@ -1217,7 +1214,6 @@ PROGMEM char i_str[] = "i";
 // Interpretation: undefined
 // Execution: ( -- n|u ) (R: loop-sys -- loop-sys )
 static void _i(void) {
-//  serial_print_P(not_done_str);
   push(rStack[rtos - 1]); 
 }
 
@@ -1422,7 +1418,10 @@ PROGMEM char postpone_str[] = "postpone";
 // ambiguous condition exists if name is not found.
 static void _postpone(void) { 
   func function;
-  getToken();
+  if(!getToken()) {
+    push(-16);
+    _throw();
+  }
   if(isWord(cTokenBuffer)) {
     if(wordFlags & COMP_ONLY) {
       if (w > 255) {
@@ -1465,7 +1464,7 @@ PROGMEM char r_from_str[] = "r>";
 static void _r_from(void) {
 #ifdef DEBUG
   ucell_t temp = rPop();
-  serial_print_P(PSTR("  Moving 0x"));
+  serial_print_P(PSTR("  Moving $"));
   Serial.print(temp, HEX);
   serial_print_P(PSTR(" To Data Stack\r\n"));
   push(temp);
@@ -1504,19 +1503,18 @@ PROGMEM char repeat_str[] = "repeat";
 static void _repeat(void) { 
   cell_t dest;
   cell_t* orig;
-  dest = pop();
   *(cell_t*)pHere = JUMP_IDX;
 #ifdef DEBUG
   debugXT(pHere);
 #endif
   pHere += sizeof(cell_t);
-  *(cell_t*)pHere = dest;
+  *(cell_t*)pHere = pop() - (cell_t)pHere;
 #ifdef DEBUG
   debugXT(pHere);
 #endif
   pHere += sizeof(cell_t);
   orig = (cell_t*)pop();
-  *orig = (cell_t)pHere;
+  *orig = (cell_t)pHere - (cell_t)orig;
 #ifdef DEBUG
   debugValue(orig);
 #endif
@@ -1555,7 +1553,10 @@ static void _s_quote(void) {
   char length;
   if (state) {
     cDelimiter = '"';
-    getToken();
+    if(!getToken()) {
+      push(-16);
+      _throw();
+    }
     length = strlen(cTokenBuffer);
     *(cell_t*)pHere = (cell_t)S_QUOTE_IDX;
   #ifdef DEBUG
@@ -1563,9 +1564,9 @@ static void _s_quote(void) {
   #endif
     pHere += sizeof(cell_t);
 #ifdef DEBUG
-    serial_print_P(PSTR("\r\n  String @ "));
+    serial_print_P(PSTR("\r\n  String @ $"));
     char* str = (char*)pHere;
-    Serial.print((ucell_t)str);
+    Serial.print((ucell_t)str, HEX);
 #endif
     for (uint8_t i = 0; i < length; i++) {
       *(char*)pHere++ = cTokenBuffer[i];
@@ -1599,7 +1600,7 @@ PROGMEM char sign_str[] = "sign";
 static void _sign(void) {
   if (flags & NUM_PROC) {
     cell_t sign = pop();
-    if (sign < 0) *--pnoPtr = '-';
+    if (sign < 0) *--pPNO = '-';
   }
 }
 
@@ -1625,7 +1626,7 @@ PROGMEM char space_str[] = "space";
 // ( -- )
 // Display one space
 static void _space(void) {
-  Serial.print(" ");
+  serial_print_P(sp_str);
 }
 
 PROGMEM char spaces_str[] = "spaces";
@@ -1634,7 +1635,7 @@ PROGMEM char spaces_str[] = "spaces";
 static void _spaces(void) {
   char n = (char) pop();
   while (n > 0) {
-    Serial.print(" ");
+    serial_print_P(sp_str);
   }
 }
 
@@ -1661,9 +1662,9 @@ PROGMEM char then_str[] = "then";
 // Run-Time: ( -- )
 static void _then(void) {
   cell_t* orig = (cell_t*)pop();
-  *orig = (ucell_t)pHere;
+  *orig = (cell_t)pHere - (cell_t)orig;
 #ifdef DEBUG
-  debugValue(pHere);
+  debugValue(orig);
 #endif
 }
 
@@ -1741,9 +1742,9 @@ static void _until(void) {
   debugXT(pHere);
 #endif
   pHere += sizeof(cell_t);
-  *(cell_t*)pHere = pop();
+  *(cell_t*)pHere = pop() - (cell_t)pHere;
 #ifdef DEBUG
-  debugXT(pHere);
+  debugValue(pHere);
 #endif
   pHere += sizeof(cell_t);
 }
@@ -1844,7 +1845,10 @@ PROGMEM char bracket_tick_str[] = "[']";
 // by the compiled phrase "['] X" is the same value returned by "' X" outside
 // of compilation state.
 static void _bracket_tick(void) {
-  getToken(); 
+  if(!getToken()) {
+    push(-16);
+    _throw();
+  }
   if(isWord(cTokenBuffer)) {
     *(cell_t*)pHere = LITERAL_IDX;
     pHere += sizeof(cell_t);
@@ -1871,7 +1875,7 @@ static void _bracket_char(void) {
     *(cell_t*)pHere = cTokenBuffer[0];
     pHere += sizeof(cell_t);
   } else {
-    push(-32);
+    push(-16);
     _throw();
   }
 }
@@ -1920,7 +1924,7 @@ static void _throw(void) {
   int8_t tableCode;
   _cr();
   Serial.print(cTokenBuffer);
-  serial_print_P(PSTR("  EXCEPTION("));
+  serial_print_P(PSTR(" EXCEPTION("));
   do{
     tableCode = pgm_read_byte(&(exception[index].code));
     if (errorCode == tableCode) {
@@ -1965,40 +1969,6 @@ static void _dot_s(void) {
   }
 }
 
-PROGMEM char words_str[] = "words";
-static void _words(void) { // --
-  uint8_t count = 0;
-  uint8_t index = 0;
-  uint8_t length = 0;
-  char* pChar;
-  
-  while (pgm_read_word(&(flashDict[index].name))) {
-      if (count > 70) {
-          Serial.println();
-          count = 0;
-      }
-      if (!(pgm_read_word(&(flashDict[index].flags)) & SMUDGE)) {
-        count += serial_print_P((char*) pgm_read_word(&(flashDict[index].name)));
-        count += serial_print_P(PSTR(" "));
-      }
-      index++;
-  }
-  
-  pUserEntry = pLastUserEntry;
-  while(pUserEntry) {
-    if (count > 70) {
-        Serial.println();
-        count = 0;
-    }
-    if (!(pUserEntry->flags & SMUDGE)) {
-      count += Serial.print(pUserEntry->name);
-      count += serial_print_P(PSTR(" "));
-    }
-    pUserEntry = (userEntry_t*)pUserEntry->prevEntry;
-  }
-  Serial.println();
-}
-
 PROGMEM char dump_str[] = "dump";
 // ( addr u -- )
 // Display the contents of u conseutive address starting at addr. The format of 
@@ -2016,16 +1986,16 @@ static void _dump(void) {
   
   while (addr < (uint8_t*)addr_end) {
     serial_print_P(PSTR("\r\n$"));
-    if (addr < (uint8_t*)0x10) serial_print_P(PSTR("0"));
-    if (addr < (uint8_t*)0x100) serial_print_P(PSTR("0"));
+    if (addr < (uint8_t*)0x10) serial_print_P(zero_str);
+    if (addr < (uint8_t*)0x100) serial_print_P(zero_str);
     Serial.print((uint16_t)addr, HEX);
-    serial_print_P(PSTR(" "));
+    serial_print_P(sp_str);
     for (uint8_t i = 0; i < 16; i++) {
-      if (*addr < 0x10) serial_print_P(PSTR("0"));
+      if (*addr < 0x10) serial_print_P(zero_str);
       Serial.print(*addr++, HEX);
-      serial_print_P(PSTR(" "));
+      serial_print_P(sp_str);
     }
-    serial_print_P(PSTR("\t"));
+    serial_print_P(tab_str);
     addr -= 16;
     for (uint8_t i = 0; i < 16; i++) {
       if (*addr < 127 && *addr > 31) 
@@ -2035,6 +2005,92 @@ static void _dump(void) {
     }
   }
 }
+
+PROGMEM char see_str[] = "see";
+// ("<spaces>name" -- )
+// Display a humman-readable representaion of the named word's definition. The
+// source of the representation (object-code decompilation, source block, etc.)
+// and the particular form of the display in implementaion defined.
+static void _see(void) { 
+  _tick();
+  char flags = wordFlags;
+  if (flags && IMMEDIATE) 
+    serial_print_P(PSTR("\r\nImmediate Word"));
+  cell_t xt = pop();
+  if (xt < 255) {
+    serial_print_P(PSTR("\r\nWord is a primative"));
+  } else {
+    cell_t* addr = (cell_t*)xt;
+    serial_print_P(PSTR("\r\nCode Field Address: "));
+    Serial.print((addr_t)addr);
+    serial_print_P(PSTR("\r\nAddr\tXT\tName"));
+    do {
+      serial_print_P(PSTR("\r\n$"));
+      Serial.print((cell_t)addr, HEX);
+      serial_print_P(tab_str);
+      Serial.print(*addr);
+      serial_print_P(tab_str);
+      xtToName(*addr);
+      switch (*addr) {
+        case 2:
+        case 4:
+        case 5:
+          serial_print_P(PSTR("("));
+          Serial.print(*++addr);
+          serial_print_P(PSTR(")"));
+          break;
+        case 13:
+        case 14:
+          serial_print_P(sp_str);
+          char *ptr = (char*)++addr;
+          do {
+            Serial.print(*ptr++);
+          } while (*ptr != 0);
+          serial_print_P(PSTR("\x22"));
+          addr = (cell_t*)++ptr;
+          addr = (cell_t*)(((cell_t)addr - 1) & -2);
+          break;
+      }
+    } while (*addr++ != 1);
+  }  
+}
+
+PROGMEM char words_str[] = "words";
+static void _words(void) { // --
+  uint8_t count = 0;
+  uint8_t index = 0;
+  uint8_t length = 0;
+  char* pChar;
+  
+  while (pgm_read_word(&(flashDict[index].name))) {
+      if (count > 70) {
+          Serial.println();
+          count = 0;
+      }
+      if (!(pgm_read_word(&(flashDict[index].flags)) & SMUDGE)) {
+        count += serial_print_P((char*) pgm_read_word(&(flashDict[index].name)));
+//        count += serial_print_P(PSTR(" "));
+        count += serial_print_P(sp_str);
+      }
+      index++;
+  }
+  
+  pUserEntry = pLastUserEntry;
+  while(pUserEntry) {
+    if (count > 70) {
+        Serial.println();
+        count = 0;
+    }
+    if (!(pUserEntry->flags & SMUDGE)) {
+      count += Serial.print(pUserEntry->name);
+//      count += serial_print_P(PSTR(" "));
+      count += serial_print_P(sp_str);
+    }
+    pUserEntry = (userEntry_t*)pUserEntry->prevEntry;
+  }
+  Serial.println();
+}
+
 #endif
 
 /*******************************************************************************/
@@ -2135,7 +2191,6 @@ flashEntry_t flashDict[] PROGMEM = {
     { type_str,           _type,            NORMAL },
     { jump_str,           _jump,            SMUDGE },
     { zjump_str,          _zjump,           SMUDGE },
-    { nzjump_str,         _nzjump,          SMUDGE },
     { subroutine_str,     _subroutine,      SMUDGE },
     { throw_str,          _throw,           NORMAL },
     { do_sys_str,         _do_sys,          SMUDGE },
@@ -2296,8 +2351,9 @@ flashEntry_t flashDict[] PROGMEM = {
 
 #ifdef TOOLS_SET
     { dot_s_str,          _dot_s,           NORMAL },
-    { words_str,          _words,           NORMAL },
     { dump_str,           _dump,            NORMAL },
+    { see_str,            _see,             NORMAL },
+    { words_str,          _words,           NORMAL },
 #endif
 
 #ifdef SEARCH_SET
