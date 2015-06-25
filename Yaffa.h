@@ -115,7 +115,7 @@ typedef struct  {                   // Structure of the dictionary
   const uint8_t  flags;             // Holds word type flags
 } flashEntry_t;
 
-extern flashEntry_t flashDict[];        // forward reference
+extern const PROGMEM flashEntry_t flashDict[];        // forward reference
 
 /******************************************************************************/
 /**  Flash Dictionary Index References                                       **/

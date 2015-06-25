@@ -25,7 +25,7 @@ const char not_done_str[] PROGMEM = " NOT Implemented Yet \n\r";
 /******************************************************************************/
 /**                       Primatives for Control Flow                        **/
 /******************************************************************************/
-PROGMEM char jump_str[] = "jump";
+const PROGMEM char jump_str[] = "jump";
 static void _jump(void) {
   ip = (cell_t*)((cell_t)ip + *ip);
 #ifdef DEBUG
@@ -33,7 +33,7 @@ static void _jump(void) {
 #endif
 }
 
-PROGMEM char zjump_str[] = "zjump";
+const PROGMEM char zjump_str[] = "zjump";
 static void _zjump(void) {
 #ifdef DEBUG
   debugValue(ip);
@@ -45,7 +45,7 @@ static void _zjump(void) {
 #endif
 }
 
-PROGMEM char subroutine_str[] = "subroutine";
+const PROGMEM char subroutine_str[] = "subroutine";
 static void _subroutine(void) {
   *pDoes = (cell_t)*ip++;
 #ifdef DEBUG
@@ -53,7 +53,7 @@ static void _subroutine(void) {
 #endif
 }
 
-PROGMEM char do_sys_str[] = "do-sys";
+const PROGMEM char do_sys_str[] = "do-sys";
 // ( n1|u1 n2|u2 -- ) (R: -- loop_sys )
 // Set up loop control parameters with index n2|u2 and limit n1|u1. An ambiguous
 // condition exists if n1|u1 and n2|u2 are not the same type. Anything already 
@@ -65,7 +65,7 @@ static void _do_sys(void) {
   rPush(pop());   // push limit on to return stack
 }
 
-PROGMEM char loop_sys_str[] = "loop-sys";
+const PROGMEM char loop_sys_str[] = "loop-sys";
 // ( n1|u1 n2|u2 -- ) (R: -- loop_sys )
 // Set up loop control parameters with index n2|u2 and limit n1|u1. An ambiguous
 // condition exists if n1|u1 and n2|u2 are not the same type. Anything already 
@@ -89,7 +89,7 @@ static void _loop_sys(void) {
   }
 }
 
-PROGMEM char leave_sys_str[] = "leave-sys";
+const PROGMEM char leave_sys_str[] = "leave-sys";
 // ( -- ) (R: loop-sys -- )
 // Discard the current loop controll parameters. An ambiguous condition exists 
 // if they are unavailable. Continue execution immediately following the 
@@ -108,7 +108,7 @@ static void _leave_sys(void) {
 #endif
 }
 
-PROGMEM char plus_loop_sys_str[] = "plus_loop-sys";
+const PROGMEM char plus_loop_sys_str[] = "plus_loop-sys";
 // ( n1|u1 n2|u2 -- ) (R: -- loop_sys )
 // Set up loop control parameters with index n2|u2 and limit n1|u1. An ambiguous
 // condition exists if n1|u1 and n2|u2 are not the same type. Anything already 
@@ -135,7 +135,7 @@ static void _plus_loop_sys(void) {
 /*******************************************************************************/
 /**                          Core Forth Words                                 **/
 /*******************************************************************************/
-PROGMEM char store_str[] = "!";
+const PROGMEM char store_str[] = "!";
 // ( x a-addr --)
 // Store x at a-addr
 static void _store(void) { 
@@ -143,7 +143,7 @@ static void _store(void) {
   *((cell_t*) address) = pop();
 }
 
-PROGMEM char number_sign_str[] = "#";
+const PROGMEM char number_sign_str[] = "#";
 // ( ud1 -- ud2)
 // Divide ud1 by number in BASE giving quotient ud2 and remainder n. Convert
 // n to external form and add the reulting character to the beginning of the
@@ -171,7 +171,7 @@ static void _number_sign(void) {
   push((ucell_t)(ud >> sizeof(ucell_t)*8));
 }
 
-PROGMEM char number_sign_gt_str[] = "#>";
+const PROGMEM char number_sign_gt_str[] = "#>";
 // ( xd -- c-addr u)
 // Drop xd. Make the pictured numeric output string available as a character 
 // string c-addr and u specify the resulting string. A program may replace 
@@ -183,7 +183,7 @@ static void _number_sign_gt(void) {
   flags &= ~NUM_PROC;
 }
 
-PROGMEM char number_sign_s_str[] = "#s";
+const PROGMEM char number_sign_s_str[] = "#s";
 // ( ud1 -- ud2)
 static void _number_sign_s(void) { 
   udcell_t ud;
@@ -205,23 +205,27 @@ static void _number_sign_s(void) {
   push((ucell_t)(ud >> sizeof(ucell_t)*8));
 }
 
-PROGMEM char tick_str[] = "'";
+const PROGMEM char tick_str[] = "'";
 // ( "<space>name" -- xt)
 // Skip leading space delimiters. Parse name delimited by a space. Find name and
 // return xt, the execution token for name. An ambiguous condition exists if 
 // name is not found. When interpreting "' xyz EXECUTE" is equivalent to xyz.
 static void _tick(void) { 
-  if (getToken()) {
-    if (isWord(cTokenBuffer)) {
-      push(w);
-      return;
-    }
-  }
-  push(-16);
-  _throw();
+    push(' ');
+    _word();
+    _find();
+    pop();
+//  if (getToken()) {
+//    if (isWord(cTokenBuffer)) {
+//      push(w);
+//      return;
+//    }
+//  }
+//  push(-16);
+//  _throw();
 }
 
-PROGMEM char paren_str[] = "(";
+const PROGMEM char paren_str[] = "(";
 // ( "ccc<paren>" -- )
 // imedeate
 static void _paren(void) { 
@@ -230,14 +234,14 @@ static void _paren(void) {
   _drop();
 }
 
-PROGMEM char star_str[] = "*";
+const PROGMEM char star_str[] = "*";
 // ( n1|u1 n2|u2 -- n3|u3 )
 // multiply n1|u1 by n2|u2 giving the product n3|u3
 static void _star(void) {
   push(pop() * pop()); 
 }
 
-PROGMEM char star_slash_str[] = "*/";
+const PROGMEM char star_slash_str[] = "*/";
 // ( n1 n2 n3 -- n4 )
 // multiply n1 by n2 producing the double cell result d. Divide d by n3
 // giving the single-cell quotient n4.
@@ -249,7 +253,7 @@ static void _star_slash(void) {
   push((cell_t)(d / n3)); 
 }
 
-PROGMEM char star_slash_mod_str[] = "*/mod";
+const PROGMEM char star_slash_mod_str[] = "*/mod";
 // ( n1 n2 n3 -- n4 n5)
 // multiply n1 by n2 producing the double cell result d. Divide d by n3
 // giving the single-cell remainder n4 and quotient n5.
@@ -262,7 +266,7 @@ static void _star_slash_mod(void) {
   push((cell_t)(d / n3)); 
 }
 
-PROGMEM char plus_str[] = "+";
+const PROGMEM char plus_str[] = "+";
 // ( n1|u1 n2|u2 -- n3|u3 )
 // add n2|u2 to n1|u1, giving the sum n3|u3
 static void _plus(void) { 
@@ -271,7 +275,7 @@ static void _plus(void) {
   push(x +  y);
 }
 
-PROGMEM char plus_store_str[] = "+!";
+const PROGMEM char plus_store_str[] = "+!";
 // ( n|u a-addr -- )
 // add n|u to the single cell number at a-addr
 static void _plus_store(void) { 
@@ -285,7 +289,7 @@ static void _plus_store(void) {
   }
 }
 
-PROGMEM char plus_loop_str[] = "+loop";
+const PROGMEM char plus_loop_str[] = "+loop";
 // Interpretaion: Interpretation semantics for this word are undefined.
 // Compolation: (C: do-sys -- )
 // Append the run-time semantics given below to the current definition. Resolve
@@ -322,7 +326,7 @@ static void _plus_loop(void) {
   }
 }
 
-PROGMEM char comma_str[] = ",";
+const PROGMEM char comma_str[] = ",";
 // ( x --  )
 // Reserve one cell of data space and store x in the cell. If the data-space
 // pointer is aligned when , begins execution, it will remain aligned when ,
@@ -338,14 +342,14 @@ static void _comma(void) {
 //  }
 }
 
-PROGMEM char minus_str[] = "-";
+const PROGMEM char minus_str[] = "-";
 // ( n1|u1 n2|u2 -- n3|u3 )
 static void _minus(void) {
   cell_t temp = pop();
   push(pop() -  temp);
 }
 
-PROGMEM char dot_str[] = ".";
+const PROGMEM char dot_str[] = ".";
 // ( n -- )
 // display n in free field format
 static void _dot(void) { 
@@ -353,7 +357,7 @@ static void _dot(void) {
   displayValue();
 }
 
-PROGMEM char dot_quote_str[] = ".\x22"; 
+const PROGMEM char dot_quote_str[] = ".\x22"; 
 // Compilation ("ccc<quote>" -- )
 // Parse ccc delimited by ". Append the run time semantics given below to 
 // the current definition.
@@ -362,7 +366,13 @@ PROGMEM char dot_quote_str[] = ".\x22";
 static void _dot_quote(void) {
   uint8_t i;
   char length;
-  if (state) {
+  if (flags & EXECUTE) {
+    Serial.print((char*)ip);
+    cell_t len = strlen((char*)ip) + 1;  // include null termiantor
+    ALIGN(len);
+    ip = (cell_t*)((cell_t)ip + len);
+  }
+  else if (state) {
     cDelimiter = '"';
     if(!getToken()) {
       push(-16);
@@ -389,15 +399,10 @@ static void _dot_quote(void) {
 #endif
     ALIGN_P(pHere);  // re- align the pHere for any new code
     cDelimiter = ' ';
-  } else {
-    Serial.print((char*)ip);
-    cell_t len = strlen((char*)ip) + 1;  // include null termiantor
-    ALIGN(len);
-    ip = (cell_t*)((cell_t)ip + len);
   }
 }
 
-PROGMEM char slash_str[] = "/";
+const PROGMEM char slash_str[] = "/";
 // ( n1 n2 -- n3 )
 // divide n1 by n2 giving a single cell quotient n3
 static void _slash(void) { 
@@ -410,7 +415,7 @@ static void _slash(void) {
   }
 }
 
-PROGMEM char slash_mod_str[] = "/mod";
+const PROGMEM char slash_mod_str[] = "/mod";
 // ( n1 n2 -- n3 n4)
 // divide n1 by n2 giving a single cell remainder n3 and quotient n4
 static void _slash_mod(void) { 
@@ -425,7 +430,7 @@ static void _slash_mod(void) {
   }
 }
 
-PROGMEM char zero_less_str[] = "0<";
+const PROGMEM char zero_less_str[] = "0<";
 // ( n -- flag )
 // flag is true if and only if n is less than zero.
 static void _zero_less(void) {
@@ -433,7 +438,7 @@ static void _zero_less(void) {
   else push(FALSE);
 }
 
-PROGMEM char zero_equal_str[] = "0=";
+const PROGMEM char zero_equal_str[] = "0=";
 // ( n -- flag )
 // flag is true if and only if n is equal to zero.
 static void _zero_equal(void) {
@@ -441,21 +446,21 @@ static void _zero_equal(void) {
   else push(FALSE);
 }
 
-PROGMEM char one_plus_str[] = "1+";
+const PROGMEM char one_plus_str[] = "1+";
 // ( n1|u1 -- n2|u2 )
 // add one to n1|u1 giving sum n2|u2.
 static void _one_plus(void) { 
   push(pop() + 1);
 }
 
-PROGMEM char one_minus_str[] = "1-";
+const PROGMEM char one_minus_str[] = "1-";
 // ( n1|u1 -- n2|u2 )
 // subtract one to n1|u1 giving sum n2|u2.
 static void _one_minus(void) { 
   push(pop() - 1);
 }
 
-PROGMEM char two_store_str[] = "2!";
+const PROGMEM char two_store_str[] = "2!";
 // ( x1 x2 a-addr --)
 // Store the cell pair x1 x2 at a-addr, with x2 at a-addr and x1 at a-addr+1
 static void _two_store(void) { 
@@ -470,21 +475,21 @@ static void _two_store(void) {
   }
 }
 
-PROGMEM char two_star_str[] = "2*";
+const PROGMEM char two_star_str[] = "2*";
 // ( x1 -- x2 )
 // x2 is the result of shilting x1 one bit to toward the MSB
 static void _two_star(void) { 
   push(pop() << 1);
 }
 
-PROGMEM char two_slash_str[] = "2/";
+const PROGMEM char two_slash_str[] = "2/";
 // ( x1 -- x2 )
 // x2 is the result of shilting x1 one bit to toward the LSB
 static void _two_slash(void) { 
   push(pop() >> 1);
 }
 
-PROGMEM char two_fetch_str[] = "2@";  // \x40 == '@'
+const PROGMEM char two_fetch_str[] = "2@";  // \x40 == '@'
 // ( a-addr -- x1 x2 )
 // Fetch cell pair x1 x2 at a-addr. x2 is at a-addr, and x1 is at a-addr+1
 static void _two_fetch(void) { 
@@ -496,28 +501,28 @@ static void _two_fetch(void) {
   push(value);
 }
 
-PROGMEM char two_drop_str[] = "2drop";
+const PROGMEM char two_drop_str[] = "2drop";
 // ( x1 x2 -- )
 static void _two_drop(void) { 
     pop();
     pop();
 }
 
-PROGMEM char two_dup_str[] = "2dup";
+const PROGMEM char two_dup_str[] = "2dup";
 // ( x1 x2 -- x1 x2 x1 x2 )
 static void _two_dup(void) {
     push(stack[tos - 1]);
     push(stack[tos - 1]);
 }
 
-PROGMEM char two_over_str[] = "2over";
+const PROGMEM char two_over_str[] = "2over";
 // ( x1 x2 x3 x4 -- x1 x2 x3 x4 x1 x2 )
 static void _two_over(void) {
     push(stack[tos - 3]);
     push(stack[tos - 2]);
 }
 
-PROGMEM char two_swap_str[] = "2swap";
+const PROGMEM char two_swap_str[] = "2swap";
 // ( x1 x2 x3 x4 -- x3 x4 x1 x2 )
 static void _two_swap(void) {
   cell_t x4 = pop();
@@ -530,7 +535,7 @@ static void _two_swap(void) {
   push(x2);
 }
 
-PROGMEM char colon_str[] = ":";
+const PROGMEM char colon_str[] = ":";
 // (C: "<space>name" -- colon-sys )
 // Skip leading space delimiters. Parse name delimited by a space. Create a 
 // definition for name, called a "colen definition" Enter compilation state
@@ -542,7 +547,7 @@ static void _colon(void) {
   openEntry();
 }
 
-PROGMEM char semicolon_str[] = ";";
+const PROGMEM char semicolon_str[] = ";";
 // IMEDIATE
 // Interpretation: undefined
 // Compilation: (C: colon-sys -- )
@@ -557,14 +562,14 @@ static void _semicolon(void) {
   state = FALSE;
 }
 
-PROGMEM char lt_str[] = "<";
+const PROGMEM char lt_str[] = "<";
 // ( n1 n2 -- flag )
 static void _lt(void) { 
   if (pop() > pop()) push(TRUE); 
   else push(FALSE);  
 }
 
-PROGMEM char lt_number_sign_str[] = "<#";
+const PROGMEM char lt_number_sign_str[] = "<#";
 // ( -- )
 // Initialize the pictured numeric output conversion process.
 static void _lt_number_sign(void) { 
@@ -577,7 +582,7 @@ static void _lt_number_sign(void) {
   flags |= NUM_PROC;
 }
 
-PROGMEM char eq_str[] = "=";
+const PROGMEM char eq_str[] = "=";
 // ( x1 x2 -- flag )
 // flag is true if and only if x1 is bit for bit the same as x2
 static void _eq(void) {
@@ -585,7 +590,7 @@ static void _eq(void) {
   else push(FALSE);
 }
 
-PROGMEM char gt_str[] = ">";
+const PROGMEM char gt_str[] = ">";
 // ( n1 n2 -- flag )
 // flag is true if and only if n1 is greater than n2
 static void _gt(void) {
@@ -593,7 +598,7 @@ static void _gt(void) {
   else push(FALSE);  
 }
 
-PROGMEM char to_body_str[] = ">body";
+const PROGMEM char to_body_str[] = ">body";
 // ( xt -- a-addr )
 // a-addr is the data-feild address corresponding to xt. An ambiguous condition
 // exists if xt is not for a word defined by CREATE.
@@ -609,19 +614,19 @@ static void _to_body(void) {
   _throw();
 }
 
-PROGMEM char to_in_str[] = ">in";
+const PROGMEM char to_in_str[] = ">in";
 // ( -- a-addr )
 static void _to_in(void) {
   push((cell_t)&cpToIn); 
 }
 
-PROGMEM char to_number_str[] = ">number";
+const PROGMEM char to_number_str[] = ">number";
 // ( ud1 c-addr1 u1 -- ud2 c-addr u2 )
 static void _to_number(void) {
   serial_print_P(not_done_str); 
 }
 
-PROGMEM char to_r_str[] = ">r";
+const PROGMEM char to_r_str[] = ">r";
 // ( x -- ) (R: -- x )
 static void _to_r(void) {
 #ifdef DEBUG
@@ -635,7 +640,7 @@ static void _to_r(void) {
 #endif
 }
 
-PROGMEM char question_dup_str[] = "?dup";
+const PROGMEM char question_dup_str[] = "?dup";
 // ( x -- 0 | x x )
 static void _question_dup(void) {
   if (stack[tos]) {
@@ -646,7 +651,7 @@ static void _question_dup(void) {
   }
 }
 
-PROGMEM char fetch_str[] = "@";
+const PROGMEM char fetch_str[] = "@";
 // ( a-addr -- x1 )
 // Fetch cell x1 at a-addr. 
 static void _fetch(void) { 
@@ -660,7 +665,7 @@ static void _fetch(void) {
 //  }
 }
 
-PROGMEM char abort_str[] = "abort";
+const PROGMEM char abort_str[] = "abort";
 // (i*x -- ) (R: j*x -- )
 // Empty the data stack and preform the fuction of QUIT, which includes emptying
 // the return stack, without displaying a message.
@@ -669,7 +674,7 @@ static void _abort(void) {
   _throw();
 }
 
-PROGMEM char abort_quote_str[] = "abort\x22";
+const PROGMEM char abort_quote_str[] = "abort\x22";
 // Interpretation: Interpretation semantics for this word are undefined.
 // Compilation: ( "ccc<quote>" -- )
 // Parse ccc delimited by a ". Append the run-time semantics given below to the
@@ -713,7 +718,7 @@ static void _abort_quote(void) {
 #endif
 }
 
-PROGMEM char abs_str[] = "abs";
+const PROGMEM char abs_str[] = "abs";
 // ( n -- u)
 // Runt-Time: 
 static void _abs(void) {
@@ -721,7 +726,7 @@ static void _abs(void) {
   push(n < 0 ? 0 - n : n);
 }
 
-PROGMEM char accept_str[] = "accept";
+const PROGMEM char accept_str[] = "accept";
 // ( c-addr +n1 -- +n2 )
 static void _accept(void) {
   cell_t length = pop(); 
@@ -730,20 +735,20 @@ static void _accept(void) {
   push(length);
 }
 
-PROGMEM char align_str[] = "align";
+const PROGMEM char align_str[] = "align";
 // ( -- )
 // if the data-space pointer is not aligned, reserve enough space to align it.
 static void _align(void) {
   ALIGN_P(pHere);
 }
 
-PROGMEM char aligned_str[] = "aligned";
+const PROGMEM char aligned_str[] = "aligned";
 // ( addr -- a-addr)
 static void _aligned(void) {
   push((pop() + 1) & -2);
 }
 
-PROGMEM char allot_str[] = "allot";
+const PROGMEM char allot_str[] = "allot";
 // ( n -- )
 // if n is greater than zero, reserve n address units of data space. if n is less
 // than zero, release |n| address units of data space. if n is zero, leave the 
@@ -760,20 +765,20 @@ static void _allot(void) {
   }
 }
 
-PROGMEM char and_str[] = "and";
+const PROGMEM char and_str[] = "and";
 // ( x1 x2 -- x3 )
 // x3 is the bit by bit logical and of x1 with x2
 static void _and(void) {
   push(pop() & pop());
 }
 
-PROGMEM char base_str[] = "base";
+const PROGMEM char base_str[] = "base";
 // ( -- a-addr)
 static void _base(void) {
   push((cell_t)&base);
 }
 
-PROGMEM char begin_str[] = "begin";
+const PROGMEM char begin_str[] = "begin";
 // Interpretation: Interpretation semantics for this word are undefined.
 // Compolation: (C: -- dest )
 // Put the next location for a transfer of control, dest, onto the control flow
@@ -785,47 +790,47 @@ static void _begin(void) {
   *(cell_t*)pHere = 0;
 }
 
-PROGMEM char bl_str[] = "bl";
+const PROGMEM char bl_str[] = "bl";
 // ( -- char )
 // char is the character value for a space.
 static void _bl(void) {
   push(' ');
 }
 
-PROGMEM char c_store_str[] = "c!";
+const PROGMEM char c_store_str[] = "c!";
 // ( char c-addr -- )
 static void _c_store(void) {
   volatile uint8_t* address = (uint8_t*)pop();
   *address = (uint8_t)pop();
 }
 
-PROGMEM char c_comma_str[] = "c,";
+const PROGMEM char c_comma_str[] = "c,";
 // ( char -- )
 static void _c_comma(void) {
   *(char*)pHere++ = (char)pop();
 }
 
-PROGMEM char c_fetch_str[] = "c@";
+const PROGMEM char c_fetch_str[] = "c@";
 // ( c-addr -- char )
 static void _c_fetch(void) {
   volatile uint8_t *address = (uint8_t*)pop();
   push(*address);
 }
 
-PROGMEM char cell_plus_str[] = "cell+";
+const PROGMEM char cell_plus_str[] = "cell+";
 // ( a-addr1 -- a-addr2 )
 static void _cell_plus(void) {
   push((addr_t)(pop()+ sizeof(cell_t)));
 }
 
-PROGMEM char cells_str[] = "cells";
+const PROGMEM char cells_str[] = "cells";
 // ( n1 -- n2 )
 // n2 is the size in address units of n1 cells.
 static void _cells(void) {
   push(pop()*sizeof(cell_t));
 }
 
-PROGMEM char char_str[] = "char";
+const PROGMEM char char_str[] = "char";
 // ( "<spaces>name" -- char )
 // Skip leading space delimiters. Parse name delimited by a space. Put the value
 // of its first character onto the stack.
@@ -837,19 +842,19 @@ static void _char(void) {
   }
 }
 
-PROGMEM char char_plus_str[] = "char+";
+const PROGMEM char char_plus_str[] = "char+";
 // ( c-addr1 -- c-addr2 )
 static void _char_plus(void) {
   push(pop() + 1);
 }
 
-PROGMEM char chars_str[] = "chars";
+const PROGMEM char chars_str[] = "chars";
 // ( n1 -- n2 )
 // n2 is the size in address units of n1 charachers.
 static void _chars(void) {
 }
 
-PROGMEM char constant_str[] = "constant";
+const PROGMEM char constant_str[] = "constant";
 // ( x"<spaces>name" --  )
 static void _constant(void) {
   openEntry();
@@ -866,7 +871,7 @@ static void _constant(void) {
   closeEntry();
 }
 
-PROGMEM char count_str[] = "count";
+const PROGMEM char count_str[] = "count";
 // ( c-addr1 -- c-addr2 u )
 static void _count(void) {
   char* addr = (char*)pop();
@@ -874,14 +879,14 @@ static void _count(void) {
   push(*addr);
 }
 
-PROGMEM char cr_str[] = "cr";
+const PROGMEM char cr_str[] = "cr";
 // ( -- )
 // Carriage Return
 static void _cr(void) { 
   Serial.println();
 }
 
-PROGMEM char create_str[] = "create";
+const PROGMEM char create_str[] = "create";
 // ( "<spaces>name" -- )
 // Skip leading space delimiters. Parse name delimited by a space. Create a 
 // definition for name with the execution sematics defined below. If the data-space
@@ -906,21 +911,21 @@ static void _create(void) {
   if (!state) closeEntry();           // Close the entry if interpreting
 }
 
-PROGMEM char decimal_str[] = "decimal";
+const PROGMEM char decimal_str[] = "decimal";
 // ( -- )
 // Set BASE to 10
 static void _decimal(void) { // value --
   base = 10;
 }
 
-PROGMEM char depth_str[] = "depth";
+const PROGMEM char depth_str[] = "depth";
 // ( -- +n )
 // +n is the number of single cells on the stack before +n was placed on it.
 static void _depth(void) { // value --
   push(tos + 1);
 }
 
-PROGMEM char do_str[] = "do";
+const PROGMEM char do_str[] = "do";
 // Compilation: (C: -- do-sys)
 // Run-Time: ( n1|u1 n2|u2 -- ) (R: -- loop-sys )
 static void _do(void) {
@@ -933,7 +938,7 @@ static void _do(void) {
   push((cell_t)pHere); // store the origin address of the do loop 
 }
 
-PROGMEM char does_str[] = "does>";
+const PROGMEM char does_str[] = "does>";
 // Compilation: (C: colon-sys1 -- colon-sys2)
 // Run-Time: ( -- ) (R: nest-sys1 -- )
 // Initiation: ( i*x -- i*x a-addr ) (R: -- next-sys2 )
@@ -957,21 +962,21 @@ static void _does(void) {
   // Start Subroutine coding
 }
 
-PROGMEM char drop_str[] = "drop";
+const PROGMEM char drop_str[] = "drop";
 // ( x -- )
 // Remove x from stack
 static void _drop(void) {
     pop();
 }
 
-PROGMEM char dupe_str[] = "dup";
+const PROGMEM char dupe_str[] = "dup";
 // ( x -- x x )
 // Duplicate x
 static void _dupe(void) { 
     push(stack[tos]);
 }
 
-PROGMEM char else_str[] = "else";
+const PROGMEM char else_str[] = "else";
 // Interpretaion: Undefine
 // Compilation: (C: orig1 -- orig2)
 // Run-Time: ( -- )
@@ -990,14 +995,14 @@ static void _else(void) {
 #endif
 }
 
-PROGMEM char emit_str[] = "emit";
+const PROGMEM char emit_str[] = "emit";
 // ( x -- )
 // display x as a character
 static void _emit(void) {
   Serial.print((char) pop());
 }
 
-PROGMEM char environment_str[] = "environment?";
+const PROGMEM char environment_str[] = "environment?";
 // ( c-addr u  -- false|i*x true )
 // c-addr is the address of a character string and u is the string's character
 // count. u may have a value in the range from zero to an implementation-defined
@@ -1068,7 +1073,7 @@ static void _environment(void) {
   _throw();
 }
 
-PROGMEM char evaluate_str[] = "evaluate";
+const PROGMEM char evaluate_str[] = "evaluate";
 // ( i*x c-addr u  -- j*x )
 // Save the current input source specification. Store minus-one (-1) in SOURCE-ID
 // if it is present. Make the string described by c-addr and u both the input 
@@ -1090,7 +1095,7 @@ static void _evaluate(void) {
   cpToIn = tempToIn;
 }
 
-PROGMEM char execute_str[] = "execute";
+const PROGMEM char execute_str[] = "execute";
 // ( i*x xt -- j*x )
 // Remove xt from the stack and preform the semantics identified by it. Other
 // stack effects are due to the word EXECUTEd
@@ -1108,7 +1113,7 @@ static void _execute(void) {
   }
 }
 
-PROGMEM char exit_str[] = "exit";
+const PROGMEM char exit_str[] = "exit";
 // Interpretation: undefined
 // Execution: ( -- ) (R: nest-sys -- )
 // Return control to the calling definition specified by nest-sys. Before 
@@ -1121,7 +1126,7 @@ static void _exit(void) {
 #endif
 }
 
-PROGMEM char fill_str[] = "fill";
+const PROGMEM char fill_str[] = "fill";
 // ( c-addr u char -- )
 // if u is greater than zero, store char in u consecutive characters of memory
 // begining with c-addr.
@@ -1134,7 +1139,7 @@ static void _fill(void) {
   }
 }
 
-PROGMEM char find_str[] = "find";
+const PROGMEM char find_str[] = "find";
 // ( c-addr -- c-addr 0 | xt 1 | xt -1)
 // Find the definition named in the counted string at c-addr. if the definition
 // is not found, return c-addr and zero. If the definition is found, return its
@@ -1160,11 +1165,14 @@ static void _find(void) {
   while(pUserEntry) {
     if (strcmp(pUserEntry->name, ptr) == 0) {
       length = strlen(pUserEntry->name);
-      w = (cell_t)pUserEntry + length + 4;
-      // Align the address in w
-      ALIGN(w);
-      push(w);
-      if(pUserEntry->flags & IMMEDIATE) push(1);
+ //     w = (cell_t)pUserEntry + length + 4;
+ //     // Align the address in w
+ //     ALIGN(w);
+ //     push(w);
+      push(pUserEntry->cfa);
+      wordFlags = pUserEntry->flags;
+//      if(pUserEntry->flags & IMMEDIATE) push(1);
+      if(wordFlags & IMMEDIATE) push(1);
       else push(-1);
       return;
     }
@@ -1173,8 +1181,10 @@ static void _find(void) {
   // Second Serarch through the flash Dictionary
   while(pgm_read_word(&(flashDict[index].name))) {
     if (!strcasecmp_P(ptr, (char*) pgm_read_word(&(flashDict[index].name)))) {
-      push(index + 1); 
-      if(pgm_read_byte(&(flashDict[index].flags)) & IMMEDIATE) push(1);
+      push(index + 1);
+      wordFlags = pgm_read_byte(&(flashDict[index].flags)); 
+//      if(pgm_read_byte(&(flashDict[index].flags)) & IMMEDIATE) push(1);
+      if(wordFlags & IMMEDIATE) push(1);
       else push(-1);
       return;                               
     }
@@ -1184,7 +1194,7 @@ static void _find(void) {
   push(0);
 }
 
-PROGMEM char fm_slash_mod_str[] = "fm/mod";
+const PROGMEM char fm_slash_mod_str[] = "fm/mod";
 // ( d1 n1 -- n2 n3 )
 // Divide d1 by n1, giving the floored quotient n3 and remainder n2.
 static void _fm_slash_mod(void) {
@@ -1194,14 +1204,14 @@ static void _fm_slash_mod(void) {
   push(d1 %  n1);  
 }
 
-PROGMEM char here_str[] = "here";
+const PROGMEM char here_str[] = "here";
 // ( -- addr )
 // addr is the data-space pointer.
 static void _here(void) {
   push((cell_t)pHere);
 }
 
-PROGMEM char hold_str[] = "hold";
+const PROGMEM char hold_str[] = "hold";
 // ( char -- )
 // add char to the beginning of the pictured numeric output string.
 static void _hold(void) {
@@ -1210,14 +1220,14 @@ static void _hold(void) {
   }
 }
 
-PROGMEM char i_str[] = "i";
+const PROGMEM char i_str[] = "i";
 // Interpretation: undefined
 // Execution: ( -- n|u ) (R: loop-sys -- loop-sys )
 static void _i(void) {
   push(rStack[rtos - 1]); 
 }
 
-PROGMEM char if_str[] = "if";
+const PROGMEM char if_str[] = "if";
 // Compilation: (C: -- orig )
 // Run-Time: ( x -- )
 static void _if(void) {
@@ -1234,7 +1244,7 @@ static void _if(void) {
   pHere +=sizeof(cell_t);
 }
 
-PROGMEM char immediate_str[] = "immediate";
+const PROGMEM char immediate_str[] = "immediate";
 // ( -- )
 // make the most recent definition an immediate word.
 static void _immediate(void) {
@@ -1243,14 +1253,14 @@ static void _immediate(void) {
   }
 }
 
-PROGMEM char invert_str[] = "invert";
+const PROGMEM char invert_str[] = "invert";
 // ( x1 -- x2 )
 // invert all bits in x1, giving its logical inverse x2
 static void _invert(void)   { 
   push(~pop());
 }
 
-PROGMEM char j_str[] = "j";
+const PROGMEM char j_str[] = "j";
 // Interpretation: undefined
 // Execution: ( -- n|u ) (R: loop-sys1 loop-sys2 -- loop-sys1 loop-sys2 )
 // n|u is a copy of the next-outer loop index. An ambiguous condition exists 
@@ -1260,13 +1270,13 @@ static void _j(void) {
   push(rStack[rtos - 4]); 
 }
 
-PROGMEM char key_str[] = "key";
+const PROGMEM char key_str[] = "key";
 // ( -- char )
 static void _key(void) {
   push(getKey());
 }
 
-PROGMEM char leave_str[] = "leave";
+const PROGMEM char leave_str[] = "leave";
 // Interpretation: undefined
 // Execution: ( -- ) (R: loop-sys -- )
 static void _leave(void) {
@@ -1284,7 +1294,7 @@ static void _leave(void) {
   _swap();
 }
 
-PROGMEM char literal_str[] = "literal";
+const PROGMEM char literal_str[] = "literal";
 // Interpretation: undefined
 // Compilation: ( x -- )
 // Run-Time: ( -- x )
@@ -1306,7 +1316,7 @@ static void _literal(void) {
   } 
 }
 
-PROGMEM char loop_str[] = "loop";
+const PROGMEM char loop_str[] = "loop";
 // Interpretation: undefined
 // Compilation: (C: do-sys -- )
 // Run-Time: ( -- ) (R: loop-sys1 -- loop-sys2 )
@@ -1334,7 +1344,7 @@ static void _loop(void) {
   }
 }
 
-PROGMEM char lshift_str[] = "lshift";
+const PROGMEM char lshift_str[] = "lshift";
 // ( x1 u -- x2 )
 // x2 is x1 shifted to left by u positions.
 static void _lshift(void) {
@@ -1343,14 +1353,14 @@ static void _lshift(void) {
   push(x1 << u);
 }
 
-PROGMEM char m_star_str[] = "m*";
+const PROGMEM char m_star_str[] = "m*";
 // ( n1 n2 -- d )
 // d is the signed product of n1 times n2.
 static void _m_star(void) {
   push(pop() * pop());
 }
 
-PROGMEM char max_str[] = "max";
+const PROGMEM char max_str[] = "max";
 // ( n1 n2 -- n3 )
 // n3 is the greater of of n1 or n2.
 static void _max(void) {
@@ -1360,7 +1370,7 @@ static void _max(void) {
   else push(n2);
 }
 
-PROGMEM char min_str[] = "min";
+const PROGMEM char min_str[] = "min";
 // ( n1 n2 -- n3 )
 // n3 is the lesser of of n1 or n2.
 static void _min(void) {
@@ -1370,7 +1380,7 @@ static void _min(void) {
   else push(n1);
 }
 
-PROGMEM char mod_str[] = "mod";
+const PROGMEM char mod_str[] = "mod";
 // ( n1 n2 -- n3 )
 // Divide n1 by n2 giving the remainder n3.
 static void _mod(void) {
@@ -1378,7 +1388,7 @@ static void _mod(void) {
   push(pop() %  temp);
 }
 
-PROGMEM char move_str[] = "move";
+const PROGMEM char move_str[] = "move";
 // ( addr1 addr2 u -- )
 // if u is greater than zero, copy the contents of u consecutive address 
 // starting at addr1 to u consecutive address starting at addr2.
@@ -1391,27 +1401,27 @@ static void _move(void) {
   }
 }
 
-PROGMEM char negate_str[] = "negate";
+const PROGMEM char negate_str[] = "negate";
 // ( n1 -- n2 )
 // Negate n1, giving its arithmetic inverse n2.
 static void _negate(void) { 
   push(!pop());
 }
 
-PROGMEM char or_str[] = "or";
+const PROGMEM char or_str[] = "or";
 // ( x1 x2 -- x3 )
 // x3 is the bit by bit logical or of x1 with x2
 static void _or(void) { 
   push(pop() |  pop());
 }
 
-PROGMEM char over_str[] = "over";
+const PROGMEM char over_str[] = "over";
 // ( x y -- x y x )
 static void _over(void) { 
     push(stack[tos - 1]);
 }
 
-PROGMEM char postpone_str[] = "postpone";
+const PROGMEM char postpone_str[] = "postpone";
 // Compilation: ( "<spaces>name" -- )
 // Skip leading space delimiters. Parse name delimited by a space. Find name. 
 // Append the compilation semantics of name to the current definition. An 
@@ -1447,7 +1457,7 @@ static void _postpone(void) {
   }
 }
 
-PROGMEM char quit_str[] = "quit";
+const PROGMEM char quit_str[] = "quit";
 // ( -- ) (R: i*x -- )
 // Empty the return stack, store zero in SOURCE-ID if it is present,
 // make the user input device the input source, enter interpretation state.
@@ -1457,7 +1467,7 @@ static void _quit(void) {
   Serial.flush();
 }
 
-PROGMEM char r_from_str[] = "r>";
+const PROGMEM char r_from_str[] = "r>";
 // Interpretation: undefined
 // Execution: ( -- x ) (R: x -- )
 // move x from the return stack to the data stack.
@@ -1473,7 +1483,7 @@ static void _r_from(void) {
 #endif
 }
 
-PROGMEM char r_fetch_str[] = "r@";
+const PROGMEM char r_fetch_str[] = "r@";
 // Interpretation: undefined
 // Execution: ( -- x ) (R: x -- x)
 // Copy x from the return stack to the data stack.
@@ -1481,7 +1491,7 @@ static void _r_fetch(void) {
   push(rStack[rtos]);
 }
 
-PROGMEM char recurse_str[] = "recurse";
+const PROGMEM char recurse_str[] = "recurse";
 // Interpretation: Interpretation semantics for this word are undefined
 // Compilation: ( -- ) 
 // Append the execution semantics of the current definition to the current
@@ -1495,7 +1505,7 @@ static void _recurse(void) {
   pHere += sizeof(cell_t);
 }
 
-PROGMEM char repeat_str[] = "repeat";
+const PROGMEM char repeat_str[] = "repeat";
 // Interpretation: undefined
 // Compilation: (C: orig dest -- )
 // Run-Time ( -- )
@@ -1520,7 +1530,7 @@ static void _repeat(void) {
 #endif
 }
 
-PROGMEM char rot_str[] = "rot";
+const PROGMEM char rot_str[] = "rot";
 // ( x1 x2 x3 -- x2 x3 x1)
 static void _rot(void) { 
   cell_t x3 = pop();
@@ -1531,7 +1541,7 @@ static void _rot(void) {
   push(x1);
 }
 
-PROGMEM char rshift_str[] = "rshift";
+const PROGMEM char rshift_str[] = "rshift";
 // ( x1 u -- x2 )
 // x2 is x1 shifted to right by u positions.
 static void _rshift(void) {
@@ -1540,7 +1550,7 @@ static void _rshift(void) {
   push(x1 >> u);
 }
 
-PROGMEM char s_quote_str[] = "s\x22"; 
+const PROGMEM char s_quote_str[] = "s\x22"; 
 // Interpretation: Interpretation semantics for this word are undefined.
 // Compilation: ("ccc<quote>" -- )
 // Parse ccc delimited by ". append the run-time sematics given below to the 
@@ -1551,7 +1561,14 @@ PROGMEM char s_quote_str[] = "s\x22";
 static void _s_quote(void) {
   uint8_t i;
   char length;
-  if (state) {
+  if (flags & EXECUTE) {
+    push((cell_t)ip);
+    cell_t len = strlen((char*)ip);
+    push(len++);    // increment for the null terminator
+    ALIGN(len);
+    ip = (cell_t*)((cell_t)ip + len);
+  }
+  else if (state) {
     cDelimiter = '"';
     if(!getToken()) {
       push(-16);
@@ -1578,16 +1595,10 @@ static void _s_quote(void) {
 #endif
     ALIGN_P(pHere);  // re- align the pHere for any new code
     cDelimiter = ' ';
-  } else {
-    push((cell_t)ip);
-    cell_t len = strlen((char*)ip);
-    push(len++);    // increment for the null terminator
-    ALIGN(len);
-    ip = (cell_t*)((cell_t)ip + len);
   }
 }
 
-PROGMEM char s_to_d_str[] = "s>d";
+const PROGMEM char s_to_d_str[] = "s>d";
 // ( n -- d )
 static void _s_to_d(void) {
   cell_t n = pop();
@@ -1595,7 +1606,7 @@ static void _s_to_d(void) {
   push(n);
 }
 
-PROGMEM char sign_str[] = "sign";
+const PROGMEM char sign_str[] = "sign";
 // ( n -- )
 static void _sign(void) {
   if (flags & NUM_PROC) {
@@ -1604,7 +1615,7 @@ static void _sign(void) {
   }
 }
 
-PROGMEM char sm_slash_rem_str[] = "sm/rem";
+const PROGMEM char sm_slash_rem_str[] = "sm/rem";
 // ( d1 n1 -- n2 n3 )
 // Divide d1 by n1, giving the symmetric quotient n3 and remainder n2.
 static void _sm_slash_rem(void) {
@@ -1614,7 +1625,7 @@ static void _sm_slash_rem(void) {
   push(d1 %  n1);  
 }
 
-PROGMEM char source_str[] = "source";
+const PROGMEM char source_str[] = "source";
 // ( -- c-addr u )
 // c-addr is the address of, and u is the number of charaters in, the input buffer.
 static void _source(void) {
@@ -1622,14 +1633,14 @@ static void _source(void) {
   push(strlen(cInputBuffer));
 }
 
-PROGMEM char space_str[] = "space";
+const PROGMEM char space_str[] = "space";
 // ( -- )
 // Display one space
 static void _space(void) {
   serial_print_P(sp_str);
 }
 
-PROGMEM char spaces_str[] = "spaces";
+const PROGMEM char spaces_str[] = "spaces";
 // ( n -- )
 // if n is greater than zero, display n space
 static void _spaces(void) {
@@ -1639,14 +1650,14 @@ static void _spaces(void) {
   }
 }
 
-PROGMEM char state_str[] = "state";
+const PROGMEM char state_str[] = "state";
 // ( -- a-addr )
 // a-addr is the address of the cell containing compilation state flag.
 static void _state(void) {
   push((cell_t)&state);
 }
 
-PROGMEM char swap_str[] = "swap";
+const PROGMEM char swap_str[] = "swap";
 static void _swap(void) { // x y -- y x
   cell_t x, y;
   
@@ -1656,7 +1667,7 @@ static void _swap(void) { // x y -- y x
   push(x);
 }
 
-PROGMEM char then_str[] = "then";
+const PROGMEM char then_str[] = "then";
 // Interpretaion: Undefine
 // Compilation: (C: orig -- )
 // Run-Time: ( -- )
@@ -1668,7 +1679,7 @@ static void _then(void) {
 #endif
 }
 
-PROGMEM char type_str[] = "type";
+const PROGMEM char type_str[] = "type";
 // ( c-addr u -- )
 // if u is greater than zero display charater string specified by c-addr and u
 static void _type(void) {
@@ -1681,14 +1692,14 @@ static void _type(void) {
     Serial.print(*addr++);
 }
 
-PROGMEM char u_dot_str[] = "u.";
+const PROGMEM char u_dot_str[] = "u.";
 // ( u -- )
 // Displau u in free field format
 static void _u_dot(void) {
   Serial.print((ucell_t) pop());
 }
 
-PROGMEM char u_lt_str[] = "u<";
+const PROGMEM char u_lt_str[] = "u<";
 // ( u1 u2 -- flag )
 // flag is true if and only if u1 is less than u2.
 static void _u_lt(void) {
@@ -1696,7 +1707,7 @@ static void _u_lt(void) {
   else push(FALSE);
 }
 
-PROGMEM char um_star_str[] = "um*";
+const PROGMEM char um_star_str[] = "um*";
 // ( u1 u2 -- ud )
 // multiply u1 by u2, giving the unsigned double-cell product ud
 static void _um_star(void) {
@@ -1707,7 +1718,7 @@ static void _um_star(void) {
   push(lsb);
 }
 
-PROGMEM char um_slash_mod_str[] = "um/mod";
+const PROGMEM char um_slash_mod_str[] = "um/mod";
 // ( ud u1 -- u2 u3 )
 // Divide ud by u1 giving quotient u3 and remainder u2.
 static void _um_slash_mod(void) {
@@ -1719,7 +1730,7 @@ static void _um_slash_mod(void) {
   push(ud / u1);
 }
 
-PROGMEM char unloop_str[] = "unloop";
+const PROGMEM char unloop_str[] = "unloop";
 // Interpretaion: Undefine
 // Execution: ( -- )(R: loop-sys -- )
 static void _unloop(void) {
@@ -1732,7 +1743,7 @@ static void _unloop(void) {
   }
 }
 
-PROGMEM char until_str[] = "until";
+const PROGMEM char until_str[] = "until";
 // Interpretaion: Undefine
 // Compilation: (C: dest -- )
 // Run-Time: ( x -- )
@@ -1749,7 +1760,7 @@ static void _until(void) {
   pHere += sizeof(cell_t);
 }
 
-PROGMEM char variable_str[] = "variable";
+const PROGMEM char variable_str[] = "variable";
 // ( "<spaces>name" -- )
 // Parse name delimited by a space. Create a definition for name with the
 // execution semantics defined below. reserve one cell of data space at an 
@@ -1776,7 +1787,7 @@ static void _variable(void) {
   }
 }
 
-PROGMEM char while_str[] = "while";
+const PROGMEM char while_str[] = "while";
 // Interpretaion: Undefine
 // Compilation: (C: dest -- orig dest )
 // Run-Time: ( x -- )
@@ -1799,33 +1810,49 @@ static void _while(void) {
   push(dest);
 }
 
-PROGMEM char word_str[] = "word";
+const PROGMEM char word_str[] = "word";
 // ( char "<chars>ccc<chars>" -- c-addr )
-// Execution: ( -- )(R: loop-sys -- )
+// Skip leading delimiters. Parse characters ccc delimited by char. An ambiguous
+// condition exists if the length of the parsed string is greater than the 
+// implementation-defined length of a counted string.
+//
+// c-addr is the address of a transient region containing the parsed word as a
+// counted string. If the parse area was empty or contained no characters other than
+// the delimiter, the resulting string has a zero length. A space, not included in 
+// the length, follows the string. A program may replace characters within the 
+// string.
+//
+// NOTE: The requirement to follow the string with a space is obsolescent and is
+// included as a concession to exsisting programs that use CONVERT. A program shall 
+// not depend on the existence of the space.
 static void _word(void) {
   uint8_t* start;
+//  char* cPtr = &cTokenBuffer[1];
   cDelimiter = (char)pop();
   start = pHere++;
   while(cpToIn <= cpSourceEnd) {
     if (*cpToIn == cDelimiter || *cpToIn == 0) {
-      *start = (pHere - start) - 1;     // write the length byte
-      pHere = start;                    // reset pHere (transient memory)
+      *start = (pHere - start) - 1;       // write the length byte
+//      cTokenBuffer[0] = (cPtr - cTokenBuffer) - 1;       // write the length byte
+      pHere = start;                      // reset pHere (transient memory)
       push((cell_t)start);                // push the c-addr onto the stack
+//      push((cell_t)cPtr);                   // push the c-addr onto the stack
       cpToIn++;
       break;      
     } else *pHere++ = *cpToIn++;
+//    } else *cPtr++ = *cpToIn++;
   }
   cDelimiter = ' ';
 }
 
-PROGMEM char xor_str[] = "xor";
+const PROGMEM char xor_str[] = "xor";
 // ( x1 x2 -- x3 )
 // x3 is the bit by bit exclusive or of x1 with x2
 static void _xor(void) { 
   push(pop() ^  pop());
 }
 
-PROGMEM char left_bracket_str[] = "[";
+const PROGMEM char left_bracket_str[] = "[";
 // Interpretation: undefined
 // Compilation: Preform the execution semantics given below
 // Execution: ( -- )
@@ -1834,7 +1861,7 @@ static void _left_bracket(void) {
   state = FALSE;
 }
 
-PROGMEM char bracket_tick_str[] = "[']";
+const PROGMEM char bracket_tick_str[] = "[']";
 // Interpretation: Interpretation semantics for this word are undefined.
 // Compilation: ( "<space>name" -- )
 // Skip leading space delimiters. Parse name delimited by a space. Find name. 
@@ -1861,7 +1888,7 @@ static void _bracket_tick(void) {
   }
 }
 
-PROGMEM char bracket_char_str[] = "[char]";
+const PROGMEM char bracket_char_str[] = "[char]";
 // Interpretation: Interpretation semantics for this word are undefined.
 // Compilation: ( "<space>name" -- )
 // Skip leading spaces delimiters. Parse name delimited by a space. Append
@@ -1880,7 +1907,7 @@ static void _bracket_char(void) {
   }
 }
 
-PROGMEM char right_bracket_str[] = "]";
+const PROGMEM char right_bracket_str[] = "]";
 // ( -- )
 // Enter compilation state.
 static void _right_bracket(void) {
@@ -1891,11 +1918,11 @@ static void _right_bracket(void) {
 /**                          Core Extension Set                               **/
 /*******************************************************************************/
 #ifdef CORE_EXT_SET
-PROGMEM char neq_str[] = "<>";
+const PROGMEM char neq_str[] = "<>";
 static void _neq(void) { 
   push(pop() != pop()); 
 }
-PROGMEM char hex_str[] = "hex";
+const PROGMEM char hex_str[] = "hex";
 // ( -- )
 // Set BASE to 16
 static void _hex(void) { // value --
@@ -1913,7 +1940,7 @@ static void _hex(void) { // value --
 /**                             Exception Set                                 **/
 /*******************************************************************************/
 #ifdef EXCEPTION_SET
-PROGMEM char throw_str[] = "throw";
+const PROGMEM char throw_str[] = "throw";
 // ( k*x n -- k*x | i*x n)
 // if any bit of n are non-zero, pop the topmost exception frame from the 
 // exception stack, along with everything on the return stack above that frame.
@@ -1957,7 +1984,7 @@ static void _throw(void) {
 /**                          Programming Tools Set                            **/
 /*******************************************************************************/
 #ifdef TOOLS_SET
-PROGMEM char dot_s_str[] = ".s";
+const PROGMEM char dot_s_str[] = ".s";
 static void _dot_s(void) {
   char i;
   char depth = tos + 1;
@@ -1969,7 +1996,7 @@ static void _dot_s(void) {
   }
 }
 
-PROGMEM char dump_str[] = "dump";
+const PROGMEM char dump_str[] = "dump";
 // ( addr u -- )
 // Display the contents of u conseutive address starting at addr. The format of 
 // the display is implementation dependent. 
@@ -2006,7 +2033,7 @@ static void _dump(void) {
   }
 }
 
-PROGMEM char see_str[] = "see";
+const PROGMEM char see_str[] = "see";
 // ("<spaces>name" -- )
 // Display a humman-readable representaion of the named word's definition. The
 // source of the representation (object-code decompilation, source block, etc.)
@@ -2055,7 +2082,7 @@ static void _see(void) {
   }  
 }
 
-PROGMEM char words_str[] = "words";
+const PROGMEM char words_str[] = "words";
 static void _words(void) { // --
   uint8_t count = 0;
   uint8_t index = 0;
@@ -2109,12 +2136,12 @@ static void _words(void) { // --
 /**                         EEPROM Operations                                  **/
 /********************************************************************************/
 #ifdef EN_EEPROM_OPS
-PROGMEM char eeRead_str[] = "eeRead";
+const PROGMEM char eeRead_str[] = "eeRead";
 static void _eeprom_read(void) {             // address -- value
   push(EEPROM.read(pop()));
 }
 
-PROGMEM char eeWrite_str[] = "eeWrite";
+const PROGMEM char eeWrite_str[] = "eeWrite";
 static void _eeprom_write(void) {             // value address -- 
   char address;
   char value;
@@ -2128,17 +2155,17 @@ static void _eeprom_write(void) {             // value address --
 /**                      Arduino Library Operations                            **/
 /********************************************************************************/
 #ifdef EN_ARDUINO_OPS
-PROGMEM char freeMem_str[] = "freeMem";
+const PROGMEM char freeMem_str[] = "freeMem";
 static void _freeMem(void) { 
   push(freeMem());
 }
 
-PROGMEM char delay_str[] = "delay";
+const PROGMEM char delay_str[] = "delay";
 static void _delay(void) {
   delay(pop());
 }
 
-PROGMEM char pinWrite_str[] = "pinWrite";
+const PROGMEM char pinWrite_str[] = "pinWrite";
 // ( u1 u2 -- )
 // Write a high (1) or low (0) value to a digital pin 
 // u1 is the pin and u2 is the value ( 1 or 0 ). To turn the LED attached to 
@@ -2147,7 +2174,7 @@ static void _pinWrite(void) {
   digitalWrite(pop(),pop());
 }
 
-PROGMEM char pinMode_str[] = "pinMode";
+const PROGMEM char pinMode_str[] = "pinMode";
 // ( u1 u2 -- )
 // Set the specified pin behavior to either an input (0) or output (1)
 // u1 is the pin and u2 is the mode ( 1 or 0 ). To control the LED attached to
@@ -2156,22 +2183,22 @@ static void _pinMode(void) {
   pinMode(pop(), pop());
 }
 
-PROGMEM char pinRead_str[] = "pinRead";
+const PROGMEM char pinRead_str[] = "pinRead";
 static void _pinRead(void) {
   push(digitalRead(pop()));
 }
 
-PROGMEM char analogRead_str[] = "analogRead";
+const PROGMEM char analogRead_str[] = "analogRead";
 static void _analogRead(void) {
   push(analogRead(pop()));
 }
 
-PROGMEM char analogWrite_str[] = "analogWrite";
+const PROGMEM char analogWrite_str[] = "analogWrite";
 static void _analogWrite(void) {
   analogWrite(pop(), pop());
 }
 
-PROGMEM char to_name_str[] = ">name";
+const PROGMEM char to_name_str[] = ">name";
 static void _toName(void) {
   xtToName(pop());
 }
@@ -2180,7 +2207,7 @@ static void _toName(void) {
 /*********************************************************************************/
 /**                         Dictionary Initialization                           **/
 /*********************************************************************************/
-flashEntry_t flashDict[] PROGMEM = {
+const PROGMEM flashEntry_t flashDict[] = {
     /*****************************************************/
     /* The inital entries must stay in this order so     */
     /* they always have the same index. They get called  */

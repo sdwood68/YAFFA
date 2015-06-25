@@ -107,7 +107,7 @@ const char error_31_str[] PROGMEM = ">BODY used on non-CREATEd definition";
 const char error_32_str[] PROGMEM = "Invalid Name Argument";
 const char error_70_str[] PROGMEM = "Buffer if Full";
 
-exception_t exception[] PROGMEM = {
+const exception_t exception[] PROGMEM = {
   { -1,    error_1_str       },
   { -2,    error_2_str       },
   { -3,    error_3_str       },

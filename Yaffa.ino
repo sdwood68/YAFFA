@@ -1,6 +1,6 @@
 /******************************************************************************/
 /**  YAFFA - Yet Anouther Forth for Adruino                                  **/
-/**  Version 0.5                                                             **/
+/**  Version 0.6                                                             **/
 /**                                                                          **/
 /**  File: YAFFA.ino                                                         **/
 /**  Copyright (C) 2012 Stuart Wood (swood@rochester.rr.com)                 **/
@@ -18,7 +18,7 @@
 /**  GNU General Public License for more details.                            **/
 /**                                                                          **/
 /**  You should have received a copy of the GNU General Public License       **/
-/**  along with YAFFA.  If not, see <http://www.gnu.org/licenses/>.         **/
+/**  along with YAFFA.  If not, see <http://www.gnu.org/licenses/>.          **/
 /**                                                                          **/
 /******************************************************************************/
 /**                                                                          **/
@@ -36,6 +36,24 @@
 /**                                                                          **/
 /******************************************************************************/
 /**                                                                          **/
+/**  REVISION HISTORY:                                                       **/
+/**                                                                          **/
+/**    0.6                                                                   **/
+/**    - Fixed PROGMEM compilation errors do to new compiler in Arduino 1.6  **/
+/**    - Embedded the revision in to the compiled code.                      **/
+/**    - Revision is now displayed in greeting at start up.                  **/
+/**    - the interpreter not cleares the word flags before it starts.        **/
+/**    - Updated TICK, WORD, and FIND to make use of primitive calls for to  **/
+/**      reduce code size.                                                   **/
+/**    - Added word flag checks in dot_quote() and _s_quote().               **/
+/**                                                                          **/
+/**  NOTES:                                                                  **/
+/**                                                                          **/
+/**    - Compiler now gives "Low memory available, stability problems may    **/
+/**      occur." worning. This is expected since most memory is reserved for **/
+/**      the FORTH enviroment. excessive recursive calls may overrun the C   **/
+/**      stack.                                                              **/
+/**                                                                          **/
 /**  THINGS TO DO:                                                           **/
 /**                                                                          **/
 /**  CORE WORDS TO ADD:                                                      **/
@@ -43,12 +61,6 @@
 /**                                                                          **/
 /**  THINGS TO FIX:                                                          **/
 /**                                                                          **/
-/**    Done Fix ." to put the string inline with the code definition.        **/
-/**    Done Fix .ABORT to put the string inline with the code definition.    **/
-/**    Done Change JUMP, ZJUMP, and NZJUMP to use relative addressing,       **/
-/**         not absolute addresses.                                          **/
-/**    Done Added the Word SEE                                               **/
-/**    How to reduce the code used for TICK, WORD, and FIND?                 **/
 /**    Fix the outerinterpreter to use FIND instead of isWord                **/
 /**    Fix Serial.Print(w, HEX) from displaying negitave numbers as 32 bits  **/
 /**    Fix ENVIRONMENT? Query to take a string refeference from the stack.   **/
@@ -71,6 +83,17 @@
 /******************************************************************************/
 //#define DEBUG
 
+/******************************************************************************/
+/** Major and minor revision numbers                                         **/
+/******************************************************************************/
+#define YAFFA_MAJOR 0
+#define YAFFA_MINOR 6
+#define MAKESTR(a) #a
+#define MAKEVER(a, b) MAKESTR(a*256+b)
+asm(" .section .version\n"
+    "yaffa_version: .word " MAKEVER(YAFFA_MAJOR, YAFFA_MINOR) "\n"
+    " .section .text\n");
+    
 #define ALIGN_P(x)  x = (uint8_t*)((addr_t)(x + 1) & -2)
 #define ALIGN(x)  x = ((addr_t)(x + 1) & -2)
 
@@ -88,7 +111,7 @@ char cInputBuffer[BUFFER_SIZE]; // Input Buffer that gets parsed
 char cTokenBuffer[TOKEN_SIZE];  // Stores Single Parsed token to be acted on
 
 /******************************************************************************/
-/** Common Strings & Terminal Constants                                                       **/
+/** Common Strings & Terminal Constants                                      **/
 /******************************************************************************/
 const char prompt_str[] PROGMEM = ">> ";
 const char compile_prompt_str[] PROGMEM = "|  ";
@@ -116,7 +139,7 @@ cell_t rStack[RSTACK_SIZE];             // The return stack
 /******************************************************************************/
 /**  Flash Dictionary Structure                                              **/
 /******************************************************************************/
-flashEntry_t* pFlashEntry = flashDict;   // Pointer into the flash Dictionary
+const flashEntry_t* pFlashEntry = flashDict;   // Pointer into the flash Dictionary
 
 /******************************************************************************/
 /**  User Dictionary is stored in name space.                                **/
@@ -169,7 +192,11 @@ void setup(void) {
   flags = ECHO_ON;
   base = 10;
   
-  serial_print_P(PSTR("\r\n YAFFA - Yet Another Forth For Arduino\r\n"));
+  serial_print_P(PSTR("\n YAFFA - Yet Another Forth For Arduino, "));
+  serial_print_P(PSTR("Version "));
+  Serial.print(YAFFA_MAJOR,DEC);
+  serial_print_P(PSTR("."));
+  Serial.println(YAFFA_MINOR,DEC);
   serial_print_P(PSTR(" Copyright (C) 2012 Stuart Wood\r\n"));
   serial_print_P(PSTR(" This program comes with ABSOLUTELY NO WARRANTY.\r\n"));
   serial_print_P(PSTR(" This is free software, and you are welcome to\r\n"));
@@ -313,10 +340,11 @@ uint8_t getToken(void) {
 }
 
 /******************************************************************************/
-/** Interpeter - Checks to see if we have a Word (executable) or Number      **/
+/** Interpeter - Interprets a new string                                     **/
 /**                                                                          **/
-/** For each subString, try to execute it.  If it can't be executed, try to  **/
-/** interpret it as a number.  If that fails, signal an error.               **/
+/** Parse the new line. For each parsed subString, try to execute it.  If it **/
+/** can't be executed, try to interpret it as a number.  If that fails,      **/
+/** signal an error.                                                         **/
 /******************************************************************************/
 void interpreter(void) {
   func function;
@@ -574,6 +602,7 @@ void closeEntry(void) {
   if (errorCode == 0) {
     *(cell_t*)pHere = EXIT_IDX;
     pHere += sizeof(cell_t);
+    pNewUserEntry->flags = 0; // clear the word's flags
     pLastUserEntry = pNewUserEntry;
 #ifdef DEBUG
     debugXT((cell_t*)(pHere - sizeof(cell_t)));
@@ -695,7 +724,6 @@ void displayValue(void) {
       Serial.print(w, BIN);
       break;
   }
-//  Serial.print(" ");
   serial_print_P(sp_str);
 }
 
