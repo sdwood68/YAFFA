@@ -1,5 +1,5 @@
 /******************************************************************************/
-/**  YAFFA - Yet Anouther Forth for Adruino                                  **/
+/**  YAFFA - Yet Another Forth for Arduino                                   **/
 /**                                                                          **/
 /**  File: Error_Codes.h                                                     **/
 /**  Copyright (C) 2012 Stuart Wood (swood@rochester.rr.com)                 **/
@@ -17,7 +17,7 @@
 /**  GNU General Public License for more details.                            **/
 /**                                                                          **/
 /**  You should have received a copy of the GNU General Public License       **/
-/**  along with YAFFA.  If not, see <http://www.gnu.org/licenses/>.         **/
+/**  along with YAFFA.  If not, see <http://www.gnu.org/licenses/>.          **/
 /**                                                                          **/
 /******************************************************************************/
 /******************************************************************************/

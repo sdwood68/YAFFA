@@ -1,6 +1,6 @@
 /******************************************************************************/
-/**  YAFFA - Yet Anouther Forth for Adruino                                  **/
-/**  Version 0.6                                                             **/
+/**  YAFFA - Yet Another Forth for Arduino                                   **/
+/**  Version 0.6.1                                                           **/
 /**                                                                          **/
 /**  File: YAFFA.ino                                                         **/
 /**  Copyright (C) 2012 Stuart Wood (swood@rochester.rr.com)                 **/
@@ -24,8 +24,9 @@
 /**                                                                          **/
 /**  DESCRIPTION:                                                            **/
 /**                                                                          **/
-/**  YAFFA is an attempt to make a Forth enviroment for the Arduino UNO that **/
-/**  is as close as possible to the ANSI Forth draft specification DPANS94.  **/
+/**  YAFFA is an attempt to make a Forth environment for the Arduino UNO     **/
+/**  that is as close as possible to the ANSI Forth draft specification      **/
+/**  DPANS94.                                                                **/
 /**                                                                          **/ 
 /**  The goal is to support at a minimum the ANS Forth C core word set and   **/
 /**  to implement wrappers for the basic I/O functions found in the Arduino  **/
@@ -38,11 +39,13 @@
 /**                                                                          **/
 /**  REVISION HISTORY:                                                       **/
 /**                                                                          **/
+/**    0.6.1                                                                 **/
+/**    - Documentation cleanup. thanks to Dr. Hugh Sasse, BSc(Hons), PhD     **/ 
 /**    0.6                                                                   **/
 /**    - Fixed PROGMEM compilation errors do to new compiler in Arduino 1.6  **/
 /**    - Embedded the revision in to the compiled code.                      **/
 /**    - Revision is now displayed in greeting at start up.                  **/
-/**    - the interpreter not cleares the word flags before it starts.        **/
+/**    - the interpreter not clears the word flags before it starts.         **/
 /**    - Updated TICK, WORD, and FIND to make use of primitive calls for to  **/
 /**      reduce code size.                                                   **/
 /**    - Added word flag checks in dot_quote() and _s_quote().               **/
@@ -50,8 +53,8 @@
 /**  NOTES:                                                                  **/
 /**                                                                          **/
 /**    - Compiler now gives "Low memory available, stability problems may    **/
-/**      occur." worning. This is expected since most memory is reserved for **/
-/**      the FORTH enviroment. excessive recursive calls may overrun the C   **/
+/**      occur." warning. This is expected since most memory is reserved for **/
+/**      the FORTH environment. Excessive recursive calls may overrun the C  **/
 /**      stack.                                                              **/
 /**                                                                          **/
 /**  THINGS TO DO:                                                           **/
@@ -61,9 +64,9 @@
 /**                                                                          **/
 /**  THINGS TO FIX:                                                          **/
 /**                                                                          **/
-/**    Fix the outerinterpreter to use FIND instead of isWord                **/
-/**    Fix Serial.Print(w, HEX) from displaying negitave numbers as 32 bits  **/
-/**    Fix ENVIRONMENT? Query to take a string refeference from the stack.   **/
+/**    Fix the outer interpreter to use FIND instead of isWord               **/
+/**    Fix Serial.Print(w, HEX) from displaying negative numbers as 32 bits  **/
+/**    Fix ENVIRONMENT? Query to take a string reference from the stack.     **/
 /**                                                                          **/
 /******************************************************************************/
 
@@ -100,10 +103,10 @@ asm(" .section .version\n"
 /******************************************************************************/
 /**  Text Buffers and Associated Registers                                   **/
 /******************************************************************************/
-char* cpSource;                 // Poiter to the string location that we will 
+char* cpSource;                 // Pointer to the string location that we will 
                                 // evaluate. This could be the input buffer or
                                 // some other location in memory
-char* cpSourceEnd;              // Points the the end of the source string
+char* cpSourceEnd;              // Points to the end of the source string
 char* cpToIn;                   // Points to a position in the source string
                                 // that was the last character to be parsed
 char cDelimiter = ' ';          // The parsers delimiter
@@ -127,8 +130,8 @@ const char zero_str[] PROGMEM = "0";
 /**  Stacks and Associated Registers                                         **/
 /**                                                                          **/
 /**  Control Flow Stack is virtual right now. But it may be but onto the     **/
-/**  data stack. error checking should be done to make sure the data stack   **/
-/**  is not corrupted. i.e. the same number of items are on the stack as     **/
+/**  data stack. Error checking should be done to make sure the data stack   **/
+/**  is not corrupted, i.e. the same number of items are on the stack as     **/
 /**  at the end of the colon-sys as before it is started.                    **/
 /******************************************************************************/
 int8_t tos = -1;                        // The data stack index
@@ -153,7 +156,7 @@ userEntry_t* pNewUserEntry = NULL;
 /******************************************************************************/
 uint8_t flags;                 // Internal Flags
 #define ECHO_ON        0x01    // Echo characters typed on the serial input
-#define NUM_PROC       0x02    // Pictured Numeric Proccess
+#define NUM_PROC       0x02    // Pictured Numeric Process
 #define EXECUTE        0x04
 
 uint8_t wordFlags;             // Word flags
@@ -180,7 +183,7 @@ cell_t* pDoes;               // Used by CREATE and DOES>
 cell_t state; // Holds the text interpreters compile/interpreter state
 cell_t* ip;   // Instruction Pointer
 cell_t w;     // Working Register
-cell_t base;  // stores the number converion radix
+cell_t base;  // stores the number conversion radix
 
 /******************************************************************************/
 /** Initialization                                                           **/
@@ -266,7 +269,7 @@ void loop(void) {
 /******************************************************************************/
 /** getKey                                                                   **/
 /**   waits for the next valid key to be entered and return its value        **/
-/**   Valid characters are:  BackSpace, Carrage Return, Escape, Tab, and     **/
+/**   Valid characters are:  Backspace, Carriage Return, Escape, Tab, and    **/
 /**   standard printable characters                                          **/
 /******************************************************************************/
 char getKey(void) {
@@ -285,9 +288,9 @@ char getKey(void) {
   
 /******************************************************************************/
 /** getLine                                                                  **/
-/**   read in a line of text ended by a Carage Return (ASCII 13)             **/
-/**   Valid characters are:  BackSpace, Carrage Return, Escape, Tab, and     **/
-/**   standard printable characters. Passed the addres to store the string,  **/
+/**   read in a line of text ended by a Carriage Return (ASCII 13)           **/
+/**   Valid characters are:  Backspace, Carriage Return, Escape, Tab, and    **/
+/**   standard printable characters. Passed the address to store the string, **/
 /**   and Returns the length of the string stored                            **/
 /******************************************************************************/
 uint8_t getLine(char* addr, uint8_t length) {
@@ -333,8 +336,8 @@ uint8_t getToken(void) {
       }
     }
   }
-  // if we get to SourceEnd without a delimiter and the token buffer has
-  // something in it return that. else return 0 to show we found nothing
+  // If we get to SourceEnd without a delimiter and the token buffer has
+  // something in it return that. Else return 0 to show we found nothing
   if (tokenIdx) return tokenIdx;    
   else return 0;  
 }
@@ -473,7 +476,7 @@ uint8_t isWord(char* addr) {
   uint8_t length = 0;
   
   pUserEntry = pLastUserEntry;
-  // First serarch through the user dictionary
+  // First search through the user dictionary
   while(pUserEntry) {
     if (strcmp(pUserEntry->name, addr) == 0) {
       wordFlags = pUserEntry->flags;
@@ -483,7 +486,7 @@ uint8_t isWord(char* addr) {
     }
     pUserEntry = (userEntry_t*)pUserEntry->prevEntry;
   }
-  // Second Serarch through the flash Dictionary
+  // Second Search through the flash Dictionary
   while(pgm_read_word(&(flashDict[index].name))) {
     if (!strcasecmp_P(addr, (char*) pgm_read_word(&(flashDict[index].name)))) {
       w = index + 1; 
@@ -502,7 +505,7 @@ uint8_t isWord(char* addr) {
 /** it on the stack and return 1.  Otherwise, push nothing and return 0.     **/
 /**                                                                          **/
 /** Numbers without a prefix are assumed to be decimal.  Decimal numbers may **/
-/** have a negitave sign in front which does a 2's complement conversion at  **/
+/** have a negative sign in front which does a 2's complement conversion at  **/
 /** the end.  Prefixes are # for decimal, $ for hexadecimal, and % for       **/
 /** binary.                                                                  **/
 /******************************************************************************/
@@ -755,7 +758,7 @@ char* xtToName(cell_t xt) {
   
   pUserEntry = pLastUserEntry;
 
-  // Second Serarch through the flash Dictionary
+  // Second Search through the flash Dictionary
   if (xt < 256) {
     serial_print_P((char*) pgm_read_word(&(flashDict[xt-1].name)));
   } else {

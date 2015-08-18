@@ -1,5 +1,5 @@
 /******************************************************************************/
-/**  YAFFA - Yet Anouther Forth for Adruino                                  **/
+/**  YAFFA - Yet Another Forth for Arduino                                   **/
 /**                                                                          **/
 /**  File: Forth.h                                                           **/
 /**  Copyright (C) 2012 Stuart Wood (swood@rochester.rr.com)                 **/
@@ -17,7 +17,7 @@
 /**  GNU General Public License for more details.                            **/
 /**                                                                          **/
 /**  You should have received a copy of the GNU General Public License       **/
-/**  along with YAFFA.  If not, see <http://www.gnu.org/licenses/>.         **/
+/**  along with YAFFA.  If not, see <http://www.gnu.org/licenses/>.          **/
 /**                                                                          **/
 /******************************************************************************/
 
@@ -36,7 +36,7 @@
 #define EN_EEPROM_OPS
 
 /******************************************************************************/
-/**  Enviromental Constansts and Name Strings                                **/
+/**  Environmental Constants and Name Strings                                **/
 /******************************************************************************/
 #define STRING_SIZE   31        // Maximum size of a counted string, in
                                 // characters
@@ -54,7 +54,7 @@
 #define RSTACK_SIZE   16        // Max. size of the return stack, in cells
 #define STACK_SIZE    16        // Max. size of the data stack, in cells
 
-#define BUFFER_SIZE   96        // Min. size is 80 charicters for ANS Forth
+#define BUFFER_SIZE   96        // Min. size is 80 characters for ANS Forth
 #define TOKEN_SIZE    32        // Definitions names shall contain 1 to 31 char.
 #define FORTH_SIZE   1280      // Size of Forth Space in bytes
 
@@ -70,8 +70,8 @@
 // Flags used to define word properties 
 #define NORMAL         0x00
 #define SMUDGE         0x20    // Word is hidden during searches
-#define COMP_ONLY      0x40    // Word is only useable during compolation
-#define IMMEDIATE      0x80    // Word is executed during compolation state
+#define COMP_ONLY      0x40    // Word is only usable during compilation
+#define IMMEDIATE      0x80    // Word is executed during compilation state
 #define LENGTH_MASK    0x1F    // Mask for the length of the string
 
 /******************************************************************************/
@@ -119,8 +119,8 @@ extern const PROGMEM flashEntry_t flashDict[];        // forward reference
 
 /******************************************************************************/
 /**  Flash Dictionary Index References                                       **/
-/**  This words referenced here must match the order in the begining of the  **/
-/**  dictionary flashDict[]
+/**  This words referenced here must match the order in the beginning of the **/
+/**  dictionary flashDict[]                                                  **/
 /******************************************************************************/
 #define EXIT_IDX           1
 #define LITERAL_IDX        2

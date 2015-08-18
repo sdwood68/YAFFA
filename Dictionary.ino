@@ -1,5 +1,5 @@
 /******************************************************************************/
-/**  YAFFA - Yet Anouther Forth for Adruino                                  **/
+/**  YAFFA - Yet Another Forth for Arduino                                   **/
 /**                                                                          **/
 /**  File: Dictionary.ino                                                    **/
 /**  Copyright (C) 2012 Stuart Wood (swood@rochester.rr.com)                 **/
@@ -17,13 +17,13 @@
 /**  GNU General Public License for more details.                            **/
 /**                                                                          **/
 /**  You should have received a copy of the GNU General Public License       **/
-/**  along with YAFFA.  If not, see <http://www.gnu.org/licenses/>.         **/
+/**  along with YAFFA.  If not, see <http://www.gnu.org/licenses/>.          **/
 /**                                                                          **/
 /******************************************************************************/
 const char not_done_str[] PROGMEM = " NOT Implemented Yet \n\r";
 
 /******************************************************************************/
-/**                       Primatives for Control Flow                        **/
+/**                       Primitives for Control Flow                        **/
 /******************************************************************************/
 const PROGMEM char jump_str[] = "jump";
 static void _jump(void) {
@@ -91,9 +91,9 @@ static void _loop_sys(void) {
 
 const PROGMEM char leave_sys_str[] = "leave-sys";
 // ( -- ) (R: loop-sys -- )
-// Discard the current loop controll parameters. An ambiguous condition exists 
+// Discard the current loop control parameters. An ambiguous condition exists 
 // if they are unavailable. Continue execution immediately following the 
-// innermost syntacitally enclosing DO ... LOOP or DO ... +LOOP.
+// innermost syntactically enclosing DO ... LOOP or DO ... +LOOP.
 static void _leave_sys(void) {
   rPop();    // fetch limit
   rPop();    // fetch index
@@ -146,7 +146,7 @@ static void _store(void) {
 const PROGMEM char number_sign_str[] = "#";
 // ( ud1 -- ud2)
 // Divide ud1 by number in BASE giving quotient ud2 and remainder n. Convert
-// n to external form and add the reulting character to the beginning of the
+// n to external form and add the resulting character to the beginning of the
 // pictured numeric output string.
 static void _number_sign(void) { 
   udcell_t ud;
@@ -290,16 +290,16 @@ static void _plus_store(void) {
 }
 
 const PROGMEM char plus_loop_str[] = "+loop";
-// Interpretaion: Interpretation semantics for this word are undefined.
-// Compolation: (C: do-sys -- )
+// Interpretation: Interpretation semantics for this word are undefined.
+// Compilation: (C: do-sys -- )
 // Append the run-time semantics given below to the current definition. Resolve
-// the destination of all unresolved occurances of LEAVE between the location 
+// the destination of all unresolved occurrences of LEAVE between the location 
 // given by do-sys and the next location for a transfer of control, to execute
 // the words following +LOOP.
 // Run-Time: ( n -- )(R: loop-sys1 -- | loop-sys2 )
 // An ambiguous condition exists if the loop control parameters are unavailable. 
-// Add n to the index. If the loop index did not cross the boundry between the 
-// loop limit minus one and the loop limit, continue executtion at the begining
+// Add n to the index. If the loop index did not cross the boundary between the 
+// loop limit minus one and the loop limit, continue execution at the beginning
 // of the loop. Otherwise, discard the current loop control parameters and 
 // continue execution immediately following the loop.
 static void _plus_loop(void) { 
@@ -368,7 +368,7 @@ static void _dot_quote(void) {
   char length;
   if (flags & EXECUTE) {
     Serial.print((char*)ip);
-    cell_t len = strlen((char*)ip) + 1;  // include null termiantor
+    cell_t len = strlen((char*)ip) + 1;  // include null terminator
     ALIGN(len);
     ip = (cell_t*)((cell_t)ip + len);
   }
@@ -477,14 +477,14 @@ static void _two_store(void) {
 
 const PROGMEM char two_star_str[] = "2*";
 // ( x1 -- x2 )
-// x2 is the result of shilting x1 one bit to toward the MSB
+// x2 is the result of shifting x1 one bit to toward the MSB
 static void _two_star(void) { 
   push(pop() << 1);
 }
 
 const PROGMEM char two_slash_str[] = "2/";
 // ( x1 -- x2 )
-// x2 is the result of shilting x1 one bit to toward the LSB
+// x2 is the result of shifting x1 one bit to toward the LSB
 static void _two_slash(void) { 
   push(pop() >> 1);
 }
@@ -538,7 +538,7 @@ static void _two_swap(void) {
 const PROGMEM char colon_str[] = ":";
 // (C: "<space>name" -- colon-sys )
 // Skip leading space delimiters. Parse name delimited by a space. Create a 
-// definition for name, called a "colen definition" Enter compilation state
+// definition for name, called a "colon definition" Enter compilation state
 // and start the current definition, producing a colon-sys. Append the 
 // initiation semantics given below to the current definition....
 static void _colon(void) {
@@ -548,7 +548,7 @@ static void _colon(void) {
 }
 
 const PROGMEM char semicolon_str[] = ";";
-// IMEDIATE
+// IMMEDIATE
 // Interpretation: undefined
 // Compilation: (C: colon-sys -- )
 // Run-time: ( -- ) (R: nest-sys -- )
@@ -600,7 +600,7 @@ static void _gt(void) {
 
 const PROGMEM char to_body_str[] = ">body";
 // ( xt -- a-addr )
-// a-addr is the data-feild address corresponding to xt. An ambiguous condition
+// a-addr is the data-field address corresponding to xt. An ambiguous condition
 // exists if xt is not for a word defined by CREATE.
 static void _to_body(void) {
   cell_t* xt = (cell_t*)pop();
@@ -667,7 +667,7 @@ static void _fetch(void) {
 
 const PROGMEM char abort_str[] = "abort";
 // (i*x -- ) (R: j*x -- )
-// Empty the data stack and preform the fuction of QUIT, which includes emptying
+// Empty the data stack and preform the function of QUIT, which includes emptying
 // the return stack, without displaying a message.
 static void _abort(void) {
   push(-1);
@@ -751,14 +751,14 @@ static void _aligned(void) {
 const PROGMEM char allot_str[] = "allot";
 // ( n -- )
 // if n is greater than zero, reserve n address units of data space. if n is less
-// than zero, release |n| address units of data space. if n is zero, leave the 
+// than zero, release |n| address units of data space. If n is zero, leave the 
 // data-space pointer unchanged.
 static void _allot(void) {
   uint8_t* pNewHere = pHere + pop();
-  // Check that the new pHere is not ouside of the forth space
+  // Check that the new pHere is not outside of the forth space
   if (pNewHere >= &forthSpace[0] &&
       pNewHere < &forthSpace[FORTH_SIZE]) {
-    pHere = pNewHere;      // Save the vaild address
+    pHere = pNewHere;      // Save the valid address
   } else {                 // Throw an exception 
     push(-9);
     _throw();
@@ -780,9 +780,9 @@ static void _base(void) {
 
 const PROGMEM char begin_str[] = "begin";
 // Interpretation: Interpretation semantics for this word are undefined.
-// Compolation: (C: -- dest )
+// Compilation: (C: -- dest )
 // Put the next location for a transfer of control, dest, onto the control flow
-// stack. Append the run-time sematics given below to the current definition.
+// stack. Append the run-time semantics given below to the current definition.
 // Run-time: ( -- )
 // Continue execution.
 static void _begin(void) {
@@ -850,7 +850,7 @@ static void _char_plus(void) {
 
 const PROGMEM char chars_str[] = "chars";
 // ( n1 -- n2 )
-// n2 is the size in address units of n1 charachers.
+// n2 is the size in address units of n1 characters.
 static void _chars(void) {
 }
 
@@ -889,10 +889,10 @@ static void _cr(void) {
 const PROGMEM char create_str[] = "create";
 // ( "<spaces>name" -- )
 // Skip leading space delimiters. Parse name delimited by a space. Create a 
-// definition for name with the execution sematics defined below. If the data-space
+// definition for name with the execution semantics defined below. If the data-space
 // pointer is not aligned, reserve enough data space to align it. The new data-space
 // pointer defines name's data field. CREATE does not allocate data space in name's
-// data feild.
+// data field.
 // name EXECUTION: ( -- a-addr )
 // a-addr is the address of name's data field. The execution semantics of name may 
 // be extended by using DOES>.
@@ -906,7 +906,7 @@ static void _create(void) {
   *(cell_t*)pHere = EXIT_IDX;   // Store an extra exit reference so 
                                 // that it can be replace by a 
                                 // subroutine pointer created by DOES>
-  pDoes = (cell_t*)pHere;        // Save this location for uses by subroutine.
+  pDoes = (cell_t*)pHere;       // Save this location for uses by subroutine.
   pHere += sizeof(cell_t);
   if (!state) closeEntry();           // Close the entry if interpreting
 }
@@ -977,7 +977,7 @@ static void _dupe(void) {
 }
 
 const PROGMEM char else_str[] = "else";
-// Interpretaion: Undefine
+// Interpretation: Undefine
 // Compilation: (C: orig1 -- orig2)
 // Run-Time: ( -- )
 static void _else(void) {
@@ -1008,10 +1008,10 @@ const PROGMEM char environment_str[] = "environment?";
 // count. u may have a value in the range from zero to an implementation-defined
 // maximum which shall not be less than 31. The character string should contain
 // a keyword from 3.2.6 Environmental queries or the optional word sets to to be
-// checked for correspondence with  an attribute of the the present environment.
+// checked for correspondence with  an attribute of the present environment.
 // If the system treats the attribute as unknown, the return flag is false; 
 // otherwise, the flag is true and i*x returned is the of the type specified in 
-// the table  for the attribute queried.
+// the table for the attribute queried.
 static void _environment(void) {
   char length = (char)pop();
   char* pStr = (char*)pop();
@@ -1129,7 +1129,7 @@ static void _exit(void) {
 const PROGMEM char fill_str[] = "fill";
 // ( c-addr u char -- )
 // if u is greater than zero, store char in u consecutive characters of memory
-// begining with c-addr.
+// beginning with c-addr.
 static void _fill(void) {
   char ch = (char)pop();
   cell_t limit = pop();
@@ -1141,7 +1141,7 @@ static void _fill(void) {
 
 const PROGMEM char find_str[] = "find";
 // ( c-addr -- c-addr 0 | xt 1 | xt -1)
-// Find the definition named in the counted string at c-addr. if the definition
+// Find the definition named in the counted string at c-addr. If the definition
 // is not found, return c-addr and zero. If the definition is found, return its
 // execution token xt. If the definition is immediate, also return one (1), 
 // otherwise also return minus-one (-1).
@@ -1161,7 +1161,7 @@ static void _find(void) {
   }
    
   pUserEntry = pLastUserEntry;
-  // First serarch through the user dictionary
+  // First search through the user dictionary
   while(pUserEntry) {
     if (strcmp(pUserEntry->name, ptr) == 0) {
       length = strlen(pUserEntry->name);
@@ -1178,7 +1178,7 @@ static void _find(void) {
     }
     pUserEntry = (userEntry_t*)pUserEntry->prevEntry;
   }
-  // Second Serarch through the flash Dictionary
+  // Second Search through the flash Dictionary
   while(pgm_read_word(&(flashDict[index].name))) {
     if (!strcasecmp_P(ptr, (char*) pgm_read_word(&(flashDict[index].name)))) {
       push(index + 1);
@@ -1509,7 +1509,7 @@ const PROGMEM char repeat_str[] = "repeat";
 // Interpretation: undefined
 // Compilation: (C: orig dest -- )
 // Run-Time ( -- )
-// Contnue execution at the location given.
+// Continue execution at the location given.
 static void _repeat(void) { 
   cell_t dest;
   cell_t* orig;
@@ -1553,10 +1553,10 @@ static void _rshift(void) {
 const PROGMEM char s_quote_str[] = "s\x22"; 
 // Interpretation: Interpretation semantics for this word are undefined.
 // Compilation: ("ccc<quote>" -- )
-// Parse ccc delimited by ". append the run-time sematics given below to the 
+// Parse ccc delimited by ". Append the run-time semantics given below to the 
 // current definition.
 // Run-Time: ( -- c-addr u )
-// Return c-addr and u decribing a string cosisting of the characters ccc. A program
+// Return c-addr and u describing a string consisting of the characters ccc. A program
 // shall not alter the returned string.
 static void _s_quote(void) {
   uint8_t i;
@@ -1627,7 +1627,7 @@ static void _sm_slash_rem(void) {
 
 const PROGMEM char source_str[] = "source";
 // ( -- c-addr u )
-// c-addr is the address of, and u is the number of charaters in, the input buffer.
+// c-addr is the address of, and u is the number of characters in, the input buffer.
 static void _source(void) {
   push((cell_t)&cInputBuffer);
   push(strlen(cInputBuffer));
@@ -1668,7 +1668,7 @@ static void _swap(void) { // x y -- y x
 }
 
 const PROGMEM char then_str[] = "then";
-// Interpretaion: Undefine
+// Interpretation: Undefine
 // Compilation: (C: orig -- )
 // Run-Time: ( -- )
 static void _then(void) {
@@ -1681,7 +1681,7 @@ static void _then(void) {
 
 const PROGMEM char type_str[] = "type";
 // ( c-addr u -- )
-// if u is greater than zero display charater string specified by c-addr and u
+// if u is greater than zero display character string specified by c-addr and u
 static void _type(void) {
   uint8_t length = (uint8_t)pop();
   char* addr = (char*)pop();
@@ -1731,7 +1731,7 @@ static void _um_slash_mod(void) {
 }
 
 const PROGMEM char unloop_str[] = "unloop";
-// Interpretaion: Undefine
+// Interpretation: Undefine
 // Execution: ( -- )(R: loop-sys -- )
 static void _unloop(void) {
   serial_print_P(not_done_str); 
@@ -1744,7 +1744,7 @@ static void _unloop(void) {
 }
 
 const PROGMEM char until_str[] = "until";
-// Interpretaion: Undefine
+// Interpretation: Undefine
 // Compilation: (C: dest -- )
 // Run-Time: ( x -- )
 static void _until(void) {
@@ -1763,10 +1763,10 @@ static void _until(void) {
 const PROGMEM char variable_str[] = "variable";
 // ( "<spaces>name" -- )
 // Parse name delimited by a space. Create a definition for name with the
-// execution semantics defined below. reserve one cell of data space at an 
-// alined address.
+// execution semantics defined below. Reserve one cell of data space at an 
+// aligned address.
 // name Execution: ( -- a-addr )
-// a-addr is the address of the reserved cell. A program is resposible for
+// a-addr is the address of the reserved cell. A program is responsible for
 // initializing the contents of a reserved cell.
 static void _variable(void) {
   if (flags & EXECUTE) {
@@ -1788,7 +1788,7 @@ static void _variable(void) {
 }
 
 const PROGMEM char while_str[] = "while";
-// Interpretaion: Undefine
+// Interpretation: Undefine
 // Compilation: (C: dest -- orig dest )
 // Run-Time: ( x -- )
 static void _while(void) {
@@ -1823,7 +1823,7 @@ const PROGMEM char word_str[] = "word";
 // string.
 //
 // NOTE: The requirement to follow the string with a space is obsolescent and is
-// included as a concession to exsisting programs that use CONVERT. A program shall 
+// included as a concession to existing programs that use CONVERT. A program shall 
 // not depend on the existence of the space.
 static void _word(void) {
   uint8_t* start;
@@ -1856,7 +1856,7 @@ const PROGMEM char left_bracket_str[] = "[";
 // Interpretation: undefined
 // Compilation: Preform the execution semantics given below
 // Execution: ( -- )
-// Enter interpretaion state. [ is an immediate word.
+// Enter interpretation state. [ is an immediate word.
 static void _left_bracket(void) {
   state = FALSE;
 }
@@ -1998,7 +1998,7 @@ static void _dot_s(void) {
 
 const PROGMEM char dump_str[] = "dump";
 // ( addr u -- )
-// Display the contents of u conseutive address starting at addr. The format of 
+// Display the contents of u consecutive address starting at addr. The format of 
 // the display is implementation dependent. 
 // DUMP may be implemented using pictured numeric output words. Consequently, 
 // its use may corrupt the transient region identified by #>.
@@ -2035,9 +2035,9 @@ static void _dump(void) {
 
 const PROGMEM char see_str[] = "see";
 // ("<spaces>name" -- )
-// Display a humman-readable representaion of the named word's definition. The
+// Display a human-readable representation of the named word's definition. The
 // source of the representation (object-code decompilation, source block, etc.)
-// and the particular form of the display in implementaion defined.
+// and the particular form of the display in implementation defined.
 static void _see(void) { 
   _tick();
   char flags = wordFlags;
@@ -2045,7 +2045,7 @@ static void _see(void) {
     serial_print_P(PSTR("\r\nImmediate Word"));
   cell_t xt = pop();
   if (xt < 255) {
-    serial_print_P(PSTR("\r\nWord is a primative"));
+    serial_print_P(PSTR("\r\nWord is a primitive"));
   } else {
     cell_t* addr = (cell_t*)xt;
     serial_print_P(PSTR("\r\nCode Field Address: "));
@@ -2169,7 +2169,7 @@ const PROGMEM char pinWrite_str[] = "pinWrite";
 // ( u1 u2 -- )
 // Write a high (1) or low (0) value to a digital pin 
 // u1 is the pin and u2 is the value ( 1 or 0 ). To turn the LED attached to 
-// pin 13 on type "1 13 pinwrite" p.s. first change its pinMode to output
+// pin 13 on type "1 13 pinwrite" p.s. First change its pinMode to output
 static void _pinWrite(void) {
   digitalWrite(pop(),pop());
 }
@@ -2209,7 +2209,7 @@ static void _toName(void) {
 /*********************************************************************************/
 const PROGMEM flashEntry_t flashDict[] = {
     /*****************************************************/
-    /* The inital entries must stay in this order so     */
+    /* The initial entries must stay in this order so    */
     /* they always have the same index. They get called  */
     /* referenced when compiling code                    */
     /*****************************************************/
