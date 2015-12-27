@@ -1,6 +1,6 @@
 /******************************************************************************/
 /**  YAFFA - Yet Another Forth for Arduino                                   **/
-/**  Version 0.6.1                                                           **/
+/**  Version 0.6.2                                                           **/
 /**                                                                          **/
 /**  File: YAFFA.ino                                                         **/
 /**  Copyright (C) 2012 Stuart Wood (swood@rochester.rr.com)                 **/
@@ -39,6 +39,12 @@
 /**                                                                          **/
 /**  REVISION HISTORY:                                                       **/
 /**                                                                          **/
+/**    - Removed static from the function headers to avoid compilation       **/
+/**      errors with the new 1.6.6 Arduino IDE.                              **/
+/**    - changed include YAFFA.H to "include Yaffa.h" to fix builds on       **/
+/**      systems that are case sensitive.                                    **/
+/**    - Fixed comments for pinWrite and pinMode.                            **/
+/**    - Yaffa.h starting to be reorganized for different architectures      **/
 /**    0.6.1                                                                 **/
 /**    - Documentation cleanup. thanks to Dr. Hugh Sasse, BSc(Hons), PhD     **/ 
 /**    0.6                                                                   **/
@@ -75,10 +81,7 @@
 /**  0x08FF   End of SRAM      -  Bottom of C Stack                          **/
 /**  0x0100   Start of SRAM    -                                             **/
 /******************************************************************************/
-
-#include <EEPROM.h>
-#include <avr/pgmspace.h>
-#include "YAFFA.h"
+#include "Yaffa.h"
 #include "Error_Codes.h"
 
 /******************************************************************************/
@@ -200,6 +203,9 @@ void setup(void) {
   Serial.print(YAFFA_MAJOR,DEC);
   serial_print_P(PSTR("."));
   Serial.println(YAFFA_MINOR,DEC);
+  #if defined(__ARDUINO_SAMD_ZERO)
+    serial_print_P(PSTR("On Arduino Zero"));
+  #endif
   serial_print_P(PSTR(" Copyright (C) 2012 Stuart Wood\r\n"));
   serial_print_P(PSTR(" This program comes with ABSOLUTELY NO WARRANTY.\r\n"));
   serial_print_P(PSTR(" This is free software, and you are welcome to\r\n"));
@@ -550,8 +556,9 @@ SKIP:                // common code to skip initial character
 /** freeMem returns the amount of free RAM that is left.                     **/
 /** This is a simplistic implementation.                                     **/
 /******************************************************************************/
-static unsigned int freeMem(void) { 
-  extern unsigned int __bss_end;
+unsigned int freeMem(void) { 
+//  extern unsigned int __bss_end;
+  extern void *__bss_end;
   extern void *__brkval;
   int16_t dummy;
   if((int)__brkval == 0) {
