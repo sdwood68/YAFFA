@@ -1,6 +1,6 @@
 /******************************************************************************/
 /**  YAFFA - Yet Another Forth for Arduino                                   **/
-/**  Version 0.6.1                                                           **/
+/**  Version 0.6.2                                                           **/
 /**                                                                          **/
 /**  File: YAFFA.ino                                                         **/
 /**  Copyright (C) 2012 Stuart Wood (swood@rochester.rr.com)                 **/
@@ -24,9 +24,8 @@
 /**                                                                          **/
 /**  DESCRIPTION:                                                            **/
 /**                                                                          **/
-/**  YAFFA is an attempt to make a Forth environment for the Arduino UNO     **/
-/**  that is as close as possible to the ANSI Forth draft specification      **/
-/**  DPANS94.                                                                **/
+/**  YAFFA is an attempt to make a Forth environment for the Arduino that    **/
+/**  is as close as possible to the ANSI Forth draft specification DPANS94.  **/
 /**                                                                          **/ 
 /**  The goal is to support at a minimum the ANS Forth C core word set and   **/
 /**  to implement wrappers for the basic I/O functions found in the Arduino  **/
@@ -39,6 +38,15 @@
 /**                                                                          **/
 /**  REVISION HISTORY:                                                       **/
 /**                                                                          **/
+/**    - Removed static from the function headers to avoid compilation       **/
+/**      errors with the new 1.6.6 Arduino IDE.                              **/
+/**    - changed file names from yaffa.h to YAFFA.h and Yaffa.ino to         **/
+/**      YAFFA.ino and the #includes to reflect the capatilized name. This   **/
+/**      helps with cheking out the project from github without renaming     **/
+/**      files.                                                              **/
+/**    - Fixed comments for pinWrite and pinMode.                            **/
+/**    - YAFFA.h reorganized for different architectures                     **/
+/**    - Replaced Serial.print(PSTR()) with Serial.print(F())
 /**    0.6.1                                                                 **/
 /**    - Documentation cleanup. thanks to Dr. Hugh Sasse, BSc(Hons), PhD     **/ 
 /**    0.6                                                                   **/
@@ -75,9 +83,11 @@
 /**  0x08FF   End of SRAM      -  Bottom of C Stack                          **/
 /**  0x0100   Start of SRAM    -                                             **/
 /******************************************************************************/
-
-#include <EEPROM.h>
-#include <avr/pgmspace.h>
+#if defined(ARDUINO_ARCH_AVR)    // 8 bit Processor
+  #include <EEPROM.h>
+  #include <avr/pgmspace.h>
+#endif
+#include <stdint.h>
 #include "YAFFA.h"
 #include "Error_Codes.h"
 
@@ -97,22 +107,6 @@ asm(" .section .version\n"
     "yaffa_version: .word " MAKEVER(YAFFA_MAJOR, YAFFA_MINOR) "\n"
     " .section .text\n");
     
-#define ALIGN_P(x)  x = (uint8_t*)((addr_t)(x + 1) & -2)
-#define ALIGN(x)  x = ((addr_t)(x + 1) & -2)
-
-/******************************************************************************/
-/**  Text Buffers and Associated Registers                                   **/
-/******************************************************************************/
-char* cpSource;                 // Pointer to the string location that we will 
-                                // evaluate. This could be the input buffer or
-                                // some other location in memory
-char* cpSourceEnd;              // Points to the end of the source string
-char* cpToIn;                   // Points to a position in the source string
-                                // that was the last character to be parsed
-char cDelimiter = ' ';          // The parsers delimiter
-char cInputBuffer[BUFFER_SIZE]; // Input Buffer that gets parsed
-char cTokenBuffer[TOKEN_SIZE];  // Stores Single Parsed token to be acted on
-
 /******************************************************************************/
 /** Common Strings & Terminal Constants                                      **/
 /******************************************************************************/
@@ -125,6 +119,22 @@ const char tab_str[] PROGMEM = "\t";
 const char hexidecimal_str[] PROGMEM = "$";
 const char binary_str[] PROGMEM = "%";
 const char zero_str[] PROGMEM = "0";
+
+/******************************************************************************/
+/** Global Variables                                                         **/
+/******************************************************************************/
+/******************************************************************************/
+/**  Text Buffers and Associated Registers                                   **/
+/******************************************************************************/
+char* cpSource;                 // Pointer to the string location that we will 
+                                // evaluate. This could be the input buffer or
+                                // some other location in memory
+char* cpSourceEnd;              // Points to the end of the source string
+char* cpToIn;                   // Points to a position in the source string
+                                // that was the last character to be parsed
+char cDelimiter = ' ';          // The parsers delimiter
+char cInputBuffer[BUFFER_SIZE]; // Input Buffer that gets parsed
+char cTokenBuffer[WORD_SIZE];  // Stores Single Parsed token to be acted on
 
 /******************************************************************************/
 /**  Stacks and Associated Registers                                         **/
@@ -193,21 +203,21 @@ void setup(void) {
   Serial.begin(19200);     // Open serial communications:
 
   flags = ECHO_ON;
-  base = 10;
+  base = DECIMAL;
   
-  serial_print_P(PSTR("\n YAFFA - Yet Another Forth For Arduino, "));
-  serial_print_P(PSTR("Version "));
+  Serial.print(F("\n YAFFA - Yet Another Forth For Arduino, "));
+  Serial.print(F("Version "));
   Serial.print(YAFFA_MAJOR,DEC);
-  serial_print_P(PSTR("."));
+  Serial.print(F("."));
   Serial.println(YAFFA_MINOR,DEC);
-  serial_print_P(PSTR(" Copyright (C) 2012 Stuart Wood\r\n"));
-  serial_print_P(PSTR(" This program comes with ABSOLUTELY NO WARRANTY.\r\n"));
-  serial_print_P(PSTR(" This is free software, and you are welcome to\r\n"));
-  serial_print_P(PSTR(" redistribute it under certain conditions.\r\n"));
-  serial_print_P(PSTR("\r\n Terminal Echo is "));
-  if (flags & ECHO_ON) serial_print_P(PSTR("On\r\n"));
-  else serial_print_P(PSTR("Off\r\n"));
-  serial_print_P(PSTR(" Pre-Defined Words : "));
+  Serial.print(F(" Copyright (C) 2012 Stuart Wood\r\n"));
+  Serial.print(F(" This program comes with ABSOLUTELY NO WARRANTY.\r\n"));
+  Serial.print(F(" This is free software, and you are welcome to\r\n"));
+  Serial.print(F(" redistribute it under certain conditions.\r\n"));
+  Serial.print(F("\r\n Terminal Echo is "));
+  if (flags & ECHO_ON) Serial.print(F("On\r\n"));
+  else Serial.print(F("Off\r\n"));
+  Serial.print(F(" Pre-Defined Words : "));
   pFlashEntry = flashDict;
   w = 0;
   while(pgm_read_word(&(pFlashEntry->name))) {
@@ -216,30 +226,34 @@ void setup(void) {
   }
   Serial.println(w);
 
-  serial_print_P(PSTR(" Input Buffer: Starts at $"));
+  Serial.print(F(" On "));
+  Serial.print(F(ARCH_STR));
+  Serial.println(F(" Architecture"));
+  Serial.print(F(" Input Buffer: Starts at $"));
   Serial.print((int)&cInputBuffer[0], HEX);
-  serial_print_P(PSTR(", Ends at $"));
+  Serial.print(F(", Ends at $"));
   Serial.println((int)&cInputBuffer[BUFFER_SIZE] - 1, HEX);
 
-  serial_print_P(PSTR(" Token Buffer: Starts at $"));
+  Serial.print(F(" Token Buffer: Starts at $"));
   Serial.print((int)&cTokenBuffer[0], HEX);
-  serial_print_P(PSTR(", Ends at $"));
-  Serial.println((int)&cTokenBuffer[TOKEN_SIZE] - 1, HEX);
+  Serial.print(F(", Ends at $"));
+  Serial.println((int)&cTokenBuffer[WORD_SIZE] - 1, HEX);
 
   pHere = &forthSpace[0];
   pOldHere = pHere;
-  serial_print_P(PSTR(" Forth Space: Starts at $"));
+  Serial.print(F(" Forth Space: Starts at $"));
   Serial.print((int)&forthSpace[0], HEX);
-  serial_print_P(PSTR(", Ends at $"));
+  Serial.print(F(", Ends at $"));
   Serial.println((int)&forthSpace[FORTH_SIZE] - 1, HEX);
 
+#if defined(ARDUINO_ARCH_AVR)    // 8 bit Processor
   mem = freeMem();
   serial_print_P(sp_str);
   Serial.print(mem);
-  serial_print_P(PSTR(" ($"));
+  Serial.print(F(" ($"));
   Serial.print(mem, HEX);  
-  serial_print_P(PSTR(") bytes free\r\n"));
-
+  Serial.print(F(") bytes free\r\n"));
+#endif
   serial_print_P(prompt_str);
 }
 
@@ -278,8 +292,8 @@ char getKey(void) {
   while(1) {
     if (Serial.available()) {
       inChar = Serial.read();
-      if (inChar == 8 || inChar == 9 || inChar == 13 || 
-          inChar == 27 || isprint(inChar)) {
+      if (inChar == ASCII_BS || inChar == ASCII_TAB || inChar == ASCII_CR || 
+          inChar == ASCII_ESC || isprint(inChar)) {
         return inChar; 
       }
     }
@@ -298,14 +312,14 @@ uint8_t getLine(char* addr, uint8_t length) {
   char* start = addr;
   do {
     inChar = getKey();
-    if(inChar == 8) {              // backspace
+    if(inChar == ASCII_BS) {
       if (addr > start) {
         *--addr = 0;
-        if (flags & ECHO_ON) serial_print_P(PSTR("\b \b"));
+        if (flags & ECHO_ON) Serial.print(F("\b \b"));
       }
-    } else if (inChar == 9 || inChar == 27) { // TAB or ECS
-      if (flags & ECHO_ON) Serial.print("\a");         // Beep
-    } else if(inChar == 13) {     // Carriage return
+    } else if (inChar == ASCII_TAB || inChar == ASCII_ESC) {
+      if (flags & ECHO_ON) Serial.print("\a"); // Beep
+    } else if(inChar == ASCII_CR) {
       if (flags & ECHO_ON) Serial.println();
       break;
     } else {
@@ -322,6 +336,7 @@ uint8_t getLine(char* addr, uint8_t length) {
 /**   Find the next token in the buffer and stores it into the token buffer  **/
 /**   with a NULL terminator. Returns length of the token or 0 if at end off **/
 /**   the buffer.                                                            **/
+/**   Could this become the word WORD?                                           **/
 /******************************************************************************/
 uint8_t getToken(void) {
   uint8_t tokenIdx = 0;
@@ -331,7 +346,7 @@ uint8_t getToken(void) {
       cpToIn++;
       if (tokenIdx) return tokenIdx;
     } else {
-      if (tokenIdx < 31) {
+      if (tokenIdx < WORD_SIZE - 1) {
         cTokenBuffer[tokenIdx++] = *cpToIn++;
       }
     }
@@ -360,7 +375,7 @@ void interpreter(void) {
       if (isWord(cTokenBuffer)) {
         if (wordFlags & IMMEDIATE) {
 #ifdef DEBUG
-          serial_print_P(PSTR("\r\n  IMMEDIATE WORD: "));
+          Serial.print(F("\r\n  IMMEDIATE WORD: "));
 #endif
           if (w > 255) {
             rPush(0);            // Push 0 as our return address
@@ -403,7 +418,7 @@ void interpreter(void) {
         }
         if (w > 255) {
 #ifdef DEBUG
-          serial_print_P(PSTR("Interpreting: "));
+          Serial.print(F("Interpreting: "));
           Serial.println(cTokenBuffer);
 #endif
           rPush(0);                  // Push 0 as our return address
@@ -414,7 +429,7 @@ void interpreter(void) {
           executeWord();
           if (errorCode) return;
 #ifdef DEBUG
-          serial_print_P(PSTR("Finished\n\r"));
+          Serial.print(F("Finished\n\r"));
 #endif
         } else {
           function = (func) pgm_read_word(&(flashDict[w - 1].function));
@@ -452,7 +467,7 @@ void executeWord(void) {
     else {
       function = (func) pgm_read_word(&(flashDict[w - 1].function));
 #ifdef DEBUG
-      serial_print_P(PSTR("  Calling: "));
+      Serial.print(F("  Calling: "));
       serial_print_P((char*) pgm_read_word(&(flashDict[w - 1].name)));
 #endif
       function();
@@ -469,7 +484,7 @@ void executeWord(void) {
 /**                                                                          **/
 /** Also set wordFlags, from the definition of the word.                     **/
 /**                                                                          **/
-/** Could this be come the word FIND or ' (tick)?                            **/
+/** Could this become the word FIND or ' (tick)?                             **/
 /******************************************************************************/
 uint8_t isWord(char* addr) {
   uint8_t index = 0;
@@ -518,9 +533,9 @@ uint8_t isNumber(char* subString) {
   
   // Look at the initial character, handling either '-', '$', or '%'
   switch (*subString) {
-    case '$':  base = 16;  goto SKIP;
-    case '%':  base = 2;   goto SKIP;
-    case '#':  base = 10;  goto SKIP;
+    case '$':  base = HEXIDECIMAL;  goto SKIP;
+    case '%':  base = BINARY;   goto SKIP;
+    case '#':  base = DECIMAL;  goto SKIP;
     case '-':  negate = 1;
 SKIP:                // common code to skip initial character
     subString++;
@@ -550,15 +565,20 @@ SKIP:                // common code to skip initial character
 /** freeMem returns the amount of free RAM that is left.                     **/
 /** This is a simplistic implementation.                                     **/
 /******************************************************************************/
-static unsigned int freeMem(void) { 
-  extern unsigned int __bss_end;
-  extern void *__brkval;
-  int16_t dummy;
-  if((int)__brkval == 0) {
-    return ((int)&dummy - (int)&__bss_end);
-  }
-  return ((int)&dummy - (int)__brkval);
+#if defined(ARDUINO_ARCH_AVR)    // 8 bit Processor
+unsigned int freeMem(void) { 
+//  extern void *__bss_end;
+//  extern void *__brkval;
+//  int16_t dummy;
+//  if((int)__brkval == 0) {
+//    return ((int)&dummy - (int)&__bss_end);
+//  }
+//  return ((int)&dummy - (int)__brkval);
+  extern int __heap_start, *__brkval; 
+  int v; 
+  return (int) &v - (__brkval == 0 ? (int) &__heap_start : (int) __brkval); 
 }
+#endif
 
 /******************************************************************************/
 /** Start a New Entry in the Dictionary                                      **/
@@ -585,15 +605,15 @@ void openEntry(void) {
   pCodeStart = (cell_t*)pHere;
 
 #ifdef DEBUG
-  serial_print_P(PSTR("\r\nNEW ENTRY @ $"));
+  Serial.print(F("\r\nNEW ENTRY @ $"));
   Serial.print((uint16_t)pNewUserEntry, HEX);
-  serial_print_P(PSTR("\r\n  NAME Starts @ $"));
+  Serial.print(F("\r\n  NAME Starts @ $"));
   Serial.print((uint16_t)pNewUserEntry->name, HEX);
-  serial_print_P(PSTR(" = "));
+  Serial.print(F(" = "));
   Serial.print(pNewUserEntry->name);
-  serial_print_P(PSTR("\r\n  Previous Entry @ $"));
+  Serial.print(F("\r\n  Previous Entry @ $"));
   Serial.print((uint16_t)pNewUserEntry->prevEntry, HEX);
-  serial_print_P(PSTR("\r\n  Code Starts @ $"));
+  Serial.print(F("\r\n  Code Starts @ $"));
   Serial.print((uint16_t)pHere, HEX);
 #endif
 }
@@ -609,7 +629,7 @@ void closeEntry(void) {
     pLastUserEntry = pNewUserEntry;
 #ifdef DEBUG
     debugXT((cell_t*)(pHere - sizeof(cell_t)));
-    serial_print_P(PSTR("\r\nEntry Closed"));
+    Serial.print(F("\r\nEntry Closed"));
 #endif
   } else pHere = pOldHere;   // Revert pHere to what it was before the start
                              // of the new word definition
@@ -617,20 +637,28 @@ void closeEntry(void) {
 
 /******************************************************************************/
 /** Stack Functions                                                          **/
+/**   Data Stack "stack" - A stack that may be used for passing parameters   **/
+/**   between definitions. When there is no possibility of confusion, the    **/
+/**   data stack is referred to as “the stack”. Contrast with return stack.  **/
+/**                                                                          **/
+/**   Return Stack "rStack" - A stack that may be used for program execution **/
+/**   nesting, do-loop execution, temporary storage, and other purposes.     **/
 /******************************************************************************/
-void push(short value) {
+/*********************************************/
+/** Push (place) a cell onto the data stack **/
+/*********************************************/
+void push(cell_t value) {
   if (tos < STACK_SIZE - 1) {
     stack[++tos] = value;
 #ifdef DEBUG
-    serial_print_P(PSTR("\r\n  Push("));
+    Serial.print(F("\r\n  Push("));
     Serial.print(value);
-    serial_print_P(PSTR("): "));
+    Serial.print(F("): "));
     char depth = tos + 1;
     if (tos >= 0) {
       for (char i = 0; i < depth ; i++) {
         Serial.print(stack[i]);
         serial_print_P(sp_str);
-//        Serial.print(" ");
       }
     }
 #endif
@@ -640,17 +668,19 @@ void push(short value) {
   }
 }
 
-void rPush(short value) {
+/***********************************************/
+/** Push (place) a cell onto the retrun stack **/
+/***********************************************/
+void rPush(cell_t value) {
   if (rtos < RSTACK_SIZE - 1) {
     rStack[++rtos] = value;
 #ifdef DEBUG
-    serial_print_P(PSTR("\r\n  rPush("));
+    Serial.print(F("\r\n  rPush("));
     Serial.print(value);
-    serial_print_P(PSTR("): "));
+    Serial.print(F("): "));
     if (rtos >= 0) {
       for (char i = 0; i < (rtos + 1) ; i++) {
         Serial.print(rStack[i]);
-//        Serial.print(" ");
         serial_print_P(sp_str);
       }
     }
@@ -661,16 +691,18 @@ void rPush(short value) {
   }
 }
 
+/*********************************************/
+/** Pop (remove) a cell onto the data stack **/
+/*********************************************/
 cell_t pop(void) {
   if (tos > -1) {
 #ifdef DEBUG
-    serial_print_P(PSTR("\r\n  Pop("));
+    Serial.print(F("\r\n  Pop("));
     Serial.print(stack[tos--]);
-    serial_print_P(PSTR("): "));
+    Serial.print(F("): "));
     if (tos >= 0) {
       for (char i = 0; i < (tos + 1) ; i++) {
         Serial.print(stack[i]);
-//        Serial.print(" ");
         serial_print_P(sp_str);
       }
     }
@@ -685,16 +717,18 @@ cell_t pop(void) {
   return 0;
 }
 
+/***********************************************/
+/** Pop (remove) a cell onto the return stack **/
+/***********************************************/
 cell_t rPop(void) {
   if (rtos > -1) {
 #ifdef DEBUG
-    serial_print_P(PSTR("\r\n  rPop("));
+    Serial.print(F("\r\n  rPop("));
     Serial.print(rStack[rtos--]);
-    serial_print_P(PSTR("): "));
+    Serial.print(F("): "));
     if (rtos >= 0) {
       for (char i = 0; i < (rtos + 1) ; i++) {
         Serial.print(rStack[i]);
-//        Serial.print(" ");
         serial_print_P(sp_str);
       }
     }
@@ -714,15 +748,15 @@ cell_t rPop(void) {
 /******************************************************************************/
 void displayValue(void) {
   switch (base){
-    case 10: Serial.print(w, DEC);
+    case DECIMAL: Serial.print(w, DEC);
       break;
-    case 16:
+    case HEXIDECIMAL:
       serial_print_P(hexidecimal_str); 
       Serial.print(w, HEX);
       break;
-    case 8:  Serial.print(w, OCT);
+    case OCTAL:  Serial.print(w, OCT);
       break;
-    case 2:  
+    case BINARY:  
       serial_print_P(binary_str); 
       Serial.print(w, BIN);
       break;
@@ -732,25 +766,21 @@ void displayValue(void) {
 
 uint8_t serial_print_P(PGM_P ptr) {
   char ch;
-  uint8_t i = 79;
-  for (; i > 0; i--) {
+//  uint8_t i = 79;
+  uint8_t i;
+//  for (; i > 0; i--) {
+  for (i = 0; i > BUFFER_SIZE; i++) {
     ch = pgm_read_byte(ptr++);
     if (ch == 0) break;
     Serial.write(ch);
   }
-  return (79 - i);
-}
-
-// String Compare, Both strings in RAM
-uint8_t f_strcmp(char* addr1, char* addr2) {
-}
-
-// String Copy, Both strings in RAM
-uint8_t f_strcpy(char* addr1, char* addr2) {
+//  return (79 - i);
+  return (i);
 }
 
 /******************************************************************************/
 /** Functions for decompiling words                                          **/
+/**   Used by _see and _toName
 /******************************************************************************/
 char* xtToName(cell_t xt) {
   uint8_t index = 0;
@@ -778,24 +808,22 @@ char* xtToName(cell_t xt) {
 /******************************************************************************/
 #ifdef DEBUG
 void debugXT(void* ptr) {
-  serial_print_P(PSTR("\r\n  Addr: $"));
+  Serial.print(F("\r\n  Addr: $"));
   Serial.print((uint16_t)ptr, HEX);
-  serial_print_P(PSTR(" => XT: "));
+  Serial.print(F(" => XT: "));
   Serial.print(*(ucell_t*)ptr);
 }
 
 void debugValue(void* ptr) {
-  serial_print_P(PSTR("\r\n  Addr: $"));
+  Serial.print(F("\r\n  Addr: $"));
   Serial.print((uint16_t)ptr, HEX);
-  serial_print_P(PSTR(" => VALUE: "));
+  Serial.print(F(" => VALUE: "));
   Serial.print(*(int16_t*)ptr);
 }
 
 void debugNewIP(void) {
-  serial_print_P(PSTR("\r\n  New IP: $"));
+  Serial.print(F("\r\n  New IP: $"));
   Serial.print((ucell_t)ip, HEX);
 }
 
 #endif
-
-

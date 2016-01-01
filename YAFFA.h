@@ -20,6 +20,124 @@
 /**  along with YAFFA.  If not, see <http://www.gnu.org/licenses/>.          **/
 /**                                                                          **/
 /******************************************************************************/
+/**                                                                          **/
+/** Architecture Specific Definitions                                        **/
+/**                                                                          **/
+/** ARDUINO_ARCH_AVR                                                         **/
+/**    __AVR_ATmega168__  - Untested                                         **/
+/**    __AVR_ATmega168P__ - Untested                                         **/
+/**    __AVR_ATmega328P__ - Supported                                        **/
+/**    __AVR_ATmega1280__ - Untested                                         **/
+/**    __AVR_ATmega2560__ - Untested                                         **/
+/**    __AVR_ATmega32U4__ - Supported                                        **/
+/**                                                                          **/
+/** ARDUINO_ARCH_SAMD - Unsupported                                          **/
+/**    __ARDUINO_SAMD_ZERO__ - Unsupported                                   **/
+/**                                                                          **/
+/**                                                                          **/
+/** Board        Architecture             Flash        SRAM        EEPROM    **/
+/** ------       -------------            ------       ------      -------   **/
+/** Uno          AVR                      32K          2K          1K        **/
+/** Leonardo     AVR                      32K          2.5K        1K        **/
+/** Zero         SAMD                     256K         32K         -         **/
+/**                                                                          **/
+/******************************************************************************/
+#ifndef __YAFFA_H__
+#define __YAFFA_H__
+
+/******************************************************************************/
+/** Memory Alignment Macros                                                  **/
+/******************************************************************************/
+#define ALIGN_P(x)  x = (uint8_t*)((addr_t)(x + 1) & -2)
+#define ALIGN(x)  x = ((addr_t)(x + 1) & -2)
+
+/******************************************************************************/
+/** Architecture Specific                                                    **/
+/******************************************************************************/
+#if defined(ARDUINO_ARCH_AVR)    // 8 bit Processor
+  #define ARCH_STR "Atmel AVR"
+  #define CELL_BITS 16
+  #define ADDRESS_BITS 16
+  typedef int16_t cell_t;
+  typedef uint16_t ucell_t;
+  typedef int32_t dcell_t;
+  typedef uint32_t udcell_t;
+  typedef uint16_t addr_t;
+
+#elif defined(ARDUINO_ARCH_SAMD) // 32 bit Processor
+  #define ARCH_STR "Atmel SAMD"
+  #define CELL_BITS 32 
+  #define ADDRESS_BITS 32
+  #define PROGMEM
+  #define strcasecmp_P(...) strcasecmp(__VA_ARGS__) 
+  #define strchr_P(...) strchr(__VA_ARGS__)
+  typedef int32_t cell_t;
+  typedef uint32_t ucell_t;
+  typedef int64_t dcell_t;
+  typedef uint64_t udcell_t;
+  typedef uint32_t addr_t;
+#endif
+
+/******************************************************************************/
+/**  Environmental Constants and Name Strings                                **/
+/******************************************************************************/
+#define FLOORED       TRUE      // Floored Division is default
+#define MAX_CHAR      0x7E      // Max. value of any character
+#define MAX_U         2^(CELL_BITS)-1      // largest usable unsigned integer
+#define MAX_N         2^(CELL_BITS-1)-1    // largest usable signed integer
+#define MAX_D         2^(2*CELL_BITS-1)-1  // Largest usable signed double number
+#define MAX_UD        2^(2*CELL_BITS)-1    // Largest usable unsigned double number
+
+
+/******************************************************************************/
+/** Board Specific                                                           **/
+/**   STRING_SIZE - Maximum length of a counted string, in characters        **/
+/**   HOLD_SIZE   - Size of the pictured numeric output string buffer, in    **/
+/**                 characters                                               **/
+/**   PAD_SIZE    - Size of the scratch area pointed to by PAD, in characters**/
+/**   RSTACK_SIZE - Size of the return stack, in cells                       **/
+/**   STACK_SIZE  - Size of the data stack, in cells                         **/
+/**   BUFFER_SIZE - Size of the input text buffer, in characters. The min.   **/
+/**                 size for an ANS Forth is 80.                             **/
+/**   TOKEN_SIZE  - Size of the token (Word) buffer. Max. length of a        **/
+/**                 Definitions names shall is TOKEN_SIZE - 1 characters.    **/
+/**   FORTH_SIZE  - Size of Forth Space in bytes                             **/
+/******************************************************************************/
+
+#if defined(__AVR_ATmega328P__) // Arduino Uno
+  #define STRING_SIZE   31
+  #define HOLD_SIZE     31
+//  #define PAD_SIZE      31
+  #define RSTACK_SIZE   16
+  #define STACK_SIZE    16
+  #define BUFFER_SIZE   96
+  #define WORD_SIZE    32
+  #define FORTH_SIZE    1280
+
+#elif defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)  // Mega 1280 & 2560
+
+#elif defined(__AVR_ATmega32U4__) // Arduino Leonardo
+  #define STRING_SIZE   31
+  #define HOLD_SIZE     31
+//  #define PAD_SIZE      31
+  #define RSTACK_SIZE   16
+  #define STACK_SIZE    16
+  #define BUFFER_SIZE   96
+  #define WORD_SIZE    32
+  #define FORTH_SIZE    1580
+
+#elif defined(__ARDUINO_SAMD_ZERO__) 
+  #define STRING_SIZE   256
+  #define HOLD_SIZE     64
+  #define PAD_SIZE      128
+  #define RSTACK_SIZE   32
+  #define STACK_SIZE    32
+  #define BUFFER_SIZE   256
+  #define TOKEN_SIZE    32
+  #define FORTH_SIZE    28*1024
+
+#endif
+
 
 /*******************************************************************************/
 /**                       Enable Dictionary Word Sets                         **/
@@ -33,36 +151,32 @@
 //#define SEARCH_SET
 //#define STRING_SET
 #define EN_ARDUINO_OPS
+#if defined(ARDUINO_ARCH_AVR)
 #define EN_EEPROM_OPS
+#endif
 
 /******************************************************************************/
-/**  Environmental Constants and Name Strings                                **/
+/**  Numbering system                                                        **/
 /******************************************************************************/
-#define STRING_SIZE   31        // Maximum size of a counted string, in
-                                // characters
-#define HOLD_SIZE     31        // Size of the pictured numeric output string 
-                                // buffer, in characters
-#define PAD_SIZE      31        // Size of the scratch area pointed to by PAD,
-                                // in characters
-#define FLOORED       TRUE      // Floored Division is default
-#define ADDRESS_BITS  16        // Size of one address unit, in bits
-#define MAX_CHAR      0x7E      // Max. value of any character
-#define MAX_D         2^31-1    // Largest usable signed double number
-#define MAX_N         2^15-1    // largest usable signed integer
-#define MAX_U         2^16-1    // largest usable unsigned integer
-#define MAX_UD        2^32-1    // Largest usable unsigned double number
-#define RSTACK_SIZE   16        // Max. size of the return stack, in cells
-#define STACK_SIZE    16        // Max. size of the data stack, in cells
+#define DECIMAL 10
+#define HEXIDECIMAL 16
+#define OCTAL 8
+#define BINARY 2
 
-#define BUFFER_SIZE   96        // Min. size is 80 characters for ANS Forth
-#define TOKEN_SIZE    32        // Definitions names shall contain 1 to 31 char.
-#define FORTH_SIZE   1280      // Size of Forth Space in bytes
+/******************************************************************************/
+/**  ASCII Constants                                                         **/
+/******************************************************************************/
+#define ASCII_BS    8
+#define ASCII_TAB   9
+#define ASCII_NL    10
+#define ASCII_ESC   27
+#define ASCII_CR    13
 
 /******************************************************************************/
 /**  Forth True and False                                                    **/
 /******************************************************************************/
-#define TRUE           -1      // All Bits set to 1
-#define FALSE          0       // All Bits set to 0
+#define TRUE        -1      // All Bits set to 1
+#define FALSE       0       // All Bits set to 0
 
 /******************************************************************************/
 /**  Flags - Internal State and Word                                         **/
@@ -83,14 +197,6 @@
 #define OF_SYS       -4
 #define LOOP_SYS     -5
 
-/******************************************************************************/
-/**  Cell Definitions & Stacks                                               **/
-/******************************************************************************/
-typedef int16_t cell_t;
-typedef uint16_t ucell_t;
-typedef int32_t dcell_t;
-typedef uint32_t udcell_t;
-typedef uint16_t addr_t;
 
 /******************************************************************************/
 /**  User Dictionary Header                                                  **/
@@ -138,8 +244,4 @@ extern const PROGMEM flashEntry_t flashDict[];        // forward reference
 #define DOT_QUOTE_IDX      14
 #define VARIABLE_IDX       15
 
-/*****************************************************************************/
-/** Function Prototypes                                                     **/
-/*****************************************************************************/
-//uint8_t serial_print_P(const char* ptr);  //prototype of function in Forth.c
-
+#endif
