@@ -19,68 +19,33 @@
 /**  You should have received a copy of the GNU General Public License       **/
 /**  along with YAFFA.  If not, see <http://www.gnu.org/licenses/>.          **/
 /**                                                                          **/
-/******************************************************************************/
-/**                                                                          **/
-/** Architecture Specific Definitions                                        **/
-/**                                                                          **/
-/** ARDUINO_ARCH_AVR                                                         **/
-/**    __AVR_ATmega168__  - Untested                                         **/
-/**    __AVR_ATmega168P__ - Untested                                         **/
-/**    __AVR_ATmega328P__ - Supported                                        **/
-/**    __AVR_ATmega1280__ - Untested                                         **/
-/**    __AVR_ATmega2560__ - Untested                                         **/
-/**    __AVR_ATmega32U4__ - Supported                                        **/
-/**                                                                          **/
-/** ARDUINO_ARCH_SAMD - Unsupported                                          **/
-/**    __ARDUINO_SAMD_ZERO__ - Unsupported                                   **/
-/**                                                                          **/
-/**                                                                          **/
-/** Board        Architecture             Flash        SRAM        EEPROM    **/
-/** ------       -------------            ------       ------      -------   **/
-/** Uno          AVR                      32K          2K          1K        **/
-/** Leonardo     AVR                      32K          2.5K        1K        **/
-/** Zero         SAMD                     256K         32K         -         **/
-/**                                                                          **/
-/******************************************************************************/
 #ifndef __YAFFA_H__
 #define __YAFFA_H__
 
 /******************************************************************************/
 /** Memory Alignment Macros                                                  **/
 /******************************************************************************/
-#define ALIGN_P(x)  x = (uint8_t*)((addr_t)(x + 1) & -2)
+#define ALIGN_P(x)  x = (cell_t*)((addr_t)(x + 1) & -2)
 #define ALIGN(x)  x = ((addr_t)(x + 1) & -2)
 
+#define MAX_OF(type) \
+        (((type)(~0LU) > (type)((1LU<<((sizeof(type)<<3)-1)) -1LU)) ? \
+        (long unsigned int)(type)(~0LU) : \
+        (long unsigned int)(type)((1LU<<((sizeof(type)<<3)-1))-1LU))
 /******************************************************************************/
-/** Architecture Specific                                                    **/
+/** Memory Types                                                             **/
 /******************************************************************************/
-#if defined(ARDUINO_ARCH_AVR)    // 8 bit Processor
-  #define ARCH_STR "Atmel AVR"
-  #define CELL_BITS 16
-  #define ADDRESS_BITS 16
-  typedef int16_t cell_t;
-  typedef uint16_t ucell_t;
-  typedef int32_t dcell_t;
-  typedef uint32_t udcell_t;
-  typedef uint16_t addr_t;
-
-#elif defined(ARDUINO_ARCH_SAMD) // 32 bit Processor
-  #define ARCH_STR "Atmel SAMD"
-  #define CELL_BITS 32 
-  #define ADDRESS_BITS 32
-  #define PROGMEM
-  #define strcasecmp_P(...) strcasecmp(__VA_ARGS__) 
-  #define strchr_P(...) strchr(__VA_ARGS__)
-  typedef int32_t cell_t;
-  typedef uint32_t ucell_t;
-  typedef int64_t dcell_t;
-  typedef uint64_t udcell_t;
-  typedef uint32_t addr_t;
-#endif
+typedef int16_t cell_t;
+typedef uint16_t ucell_t;
+typedef int32_t dcell_t;
+typedef uint32_t udcell_t;
+typedef uint16_t addr_t;
 
 /******************************************************************************/
 /**  Environmental Constants and Name Strings                                **/
 /******************************************************************************/
+#define CORE          TRUE      // Complete Core Word Set
+#define CORE_EXT      FALSE     // Complete Extended Core Word Set
 #define FLOORED       TRUE      // Floored Division is default
 #define MAX_CHAR      0x7E      // Max. value of any character
 #define MAX_U         2^(CELL_BITS)-1      // largest usable unsigned integer
@@ -107,12 +72,12 @@
 #if defined(__AVR_ATmega328P__) // Arduino Uno
   #define STRING_SIZE   31
   #define HOLD_SIZE     31
-//  #define PAD_SIZE      31
+  #define PAD_SIZE      31
   #define RSTACK_SIZE   16
   #define STACK_SIZE    16
   #define BUFFER_SIZE   96
   #define WORD_SIZE    32
-  #define FORTH_SIZE    1280
+  #define FORTH_SIZE    2*2048/(3*sizeof(cell_t))
 
 #elif defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)  // Mega 1280 & 2560
 
@@ -125,16 +90,6 @@
   #define BUFFER_SIZE   96
   #define WORD_SIZE    32
   #define FORTH_SIZE    1580
-
-#elif defined(__ARDUINO_SAMD_ZERO__) 
-  #define STRING_SIZE   256
-  #define HOLD_SIZE     64
-  #define PAD_SIZE      128
-  #define RSTACK_SIZE   32
-  #define STACK_SIZE    32
-  #define BUFFER_SIZE   256
-  #define TOKEN_SIZE    32
-  #define FORTH_SIZE    28*1024
 
 #endif
 

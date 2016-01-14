@@ -29,37 +29,25 @@ const char not_done_str[] PROGMEM = " NOT Implemented Yet \n\r";
 /******************************************************************************/
 const PROGMEM char jump_str[] = "jump";
 void _jump(void) {
-  ip = (cell_t*)((cell_t)ip + *ip);
-#ifdef DEBUG
-  debugNewIP();
-#endif
+  ip = (cell_t*)((size_t)ip + *ip);
 }
 
 const PROGMEM char zjump_str[] = "zjump";
 void _zjump(void) {
-#ifdef DEBUG
-  debugValue(ip);
-#endif
-  if(!pop()) ip = (cell_t*)((cell_t)ip + *ip);
+  if(!pop()) ip = (cell_t*)((size_t)ip + *ip);
   else ip++;
-#ifdef DEBUG
-  debugNewIP();
-#endif
 }
 
 const PROGMEM char subroutine_str[] = "subroutine";
 void _subroutine(void) {
   *pDoes = (cell_t)*ip++;
-#ifdef DEBUG
-  debugValue(pDoes);
-#endif
 }
 
 const PROGMEM char do_sys_str[] = "do-sys";
 // ( n1|u1 n2|u2 -- ) (R: -- loop_sys )
 // Set up loop control parameters with index n2|u2 and limit n1|u1. An ambiguous
-// condition exists if n1|u1 and n2|u2 are not the same type. Anything already 
-// on the return stack becomes unavailable until the loop-control parameters 
+// condition exists if n1|u1 and n2|u2 are not the same type. Anything already
+// on the return stack becomes unavailable until the loop-control parameters
 // are discarded.
 void _do_sys(void) {
   rPush(LOOP_SYS);
@@ -105,9 +93,6 @@ void _leave_sys(void) {
     return;
   }
   ip = (cell_t*)*ip;
-#ifdef DEBUG
-  debugNewIP();
-#endif
 }
 
 const PROGMEM char plus_loop_sys_str[] = "plus_loop-sys";
@@ -154,21 +139,8 @@ void _number_sign(void) {
   udcell_t ud;
   ud = (udcell_t)pop()<<sizeof(ucell_t)*8;
   ud += (udcell_t)pop();
-#ifdef DEBUG
-  Serial.print(F("  ud = "));
-  Serial.println(ud);
-  Serial.println(sizeof(ucell_t));
-#endif
   *--pPNO = pgm_read_byte(&charset[ud % base]);
   ud /= base;
-#ifdef DEBUG
-  Serial.print(F("  new ud = "));
-  Serial.println(ud);
-  Serial.print(F("  pPNO = $"));
-  Serial.print((addr_t)pPNO, HEX);
-  Serial.print(F(" = "));
-  Serial.println((char)*pPNO);
-#endif
   push((ucell_t)ud);
   push((ucell_t)(ud >> sizeof(ucell_t)*8));
 }
@@ -180,8 +152,8 @@ const PROGMEM char number_sign_gt_str[] = "#>";
 // characters within the string.
 void _number_sign_gt(void) {
   _two_drop(); 
-  push((cell_t)pPNO);
-  push((cell_t)strlen(pPNO));
+  push((size_t)pPNO);
+  push((size_t)strlen(pPNO));
   flags &= ~NUM_PROC;
 }
 
@@ -192,17 +164,9 @@ void _number_sign_s(void) {
   ud = (udcell_t)pop() << sizeof(ucell_t)*8;
   ud += (udcell_t)pop();
   while (ud) {
-      *--pPNO = pgm_read_byte(&charset[ud % base]);
-      ud /= base;
+    *--pPNO = pgm_read_byte(&charset[ud % base]);
+    ud /= base;
   }
-#ifdef DEBUG
-  Serial.print(F("  ud = "));
-  Serial.println(ud);
-  Serial.print(F("  pPNO = $"));
-  Serial.print((addr_t)pPNO, HEX);
-  Serial.print(F(" = "));
-  Serial.println((char)*pPNO);
-#endif
   push((ucell_t)ud);
   push((ucell_t)(ud >> sizeof(ucell_t)*8));
 }
@@ -282,8 +246,8 @@ const PROGMEM char plus_store_str[] = "+!";
 // add n|u to the single cell number at a-addr
 void _plus_store(void) { 
   addr_t address = pop();
-  if (address >= (addr_t)&forthSpace[0] && 
-      address < (addr_t)&forthSpace[FORTH_SIZE])
+  if (address >= (size_t)&forthSpace[0] && 
+      address < (size_t)&forthSpace[FORTH_SIZE])
     *((unsigned char*) address) += pop();
   else {
     push(-9);
@@ -305,20 +269,12 @@ const PROGMEM char plus_loop_str[] = "+loop";
 // of the loop. Otherwise, discard the current loop control parameters and 
 // continue execution immediately following the loop.
 void _plus_loop(void) { 
-  *(cell_t*)pHere = PLUS_LOOP_SYS_IDX;
-#ifdef DEBUG
-  debugXT(pHere);
-#endif
-  pHere += sizeof(cell_t);
-  *(cell_t*)pHere = pop();
-#ifdef DEBUG
-  debugXT(pHere);
-#endif
-  pHere += sizeof(cell_t);
+  *pHere++ = PLUS_LOOP_SYS_IDX;
+  *pHere++ = pop();
   cell_t* leave = (cell_t*)pop();
   if (leave != (cell_t*)DO_SYS) {
     if (stack[tos] == DO_SYS) {
-      *leave = (ucell_t)pHere;
+      *leave = (addr_t)pHere;
       pop();
     } else {
       push(-22);
@@ -334,14 +290,8 @@ const PROGMEM char comma_str[] = ",";
 // pointer is aligned when , begins execution, it will remain aligned when ,
 // finishes execution. An ambiguous condition exists if the data-space pointer
 // is not aligned prior to execution of ,.
-void _comma(void) { 
-//  if (((cell_t)pHere & 1) == 0) {
-    *(cell_t*)pHere = pop();
-    pHere += sizeof(cell_t);
-//  } else {
-//    push(-23);
-//    _throw();
-//  }
+static void _comma(void) {
+  *pHere++ = pop();
 }
 
 const PROGMEM char minus_str[] = "-";
@@ -371,8 +321,8 @@ void _dot_quote(void) {
   if (flags & EXECUTE) {
     Serial.print((char*)ip);
     cell_t len = strlen((char*)ip) + 1;  // include null terminator
-    ALIGN(len);
-    ip = (cell_t*)((cell_t)ip + len);
+    ip = (cell_t*)((addr_t)ip + len);
+    ALIGN_P(ip);
   }
   else if (state) {
     cDelimiter = '"';
@@ -381,24 +331,13 @@ void _dot_quote(void) {
       _throw();
     }
     length = strlen(cTokenBuffer);
-    *(cell_t*)pHere = (cell_t)DOT_QUOTE_IDX;
-#ifdef DEBUG
-    debugXT(pHere);
-#endif
-    pHere += sizeof(cell_t);
-#ifdef DEBUG
-    Serial.print(F("\r\n  String @ $"));
-    char* str = (char*)pHere;
-    Serial.print((ucell_t)str, HEX);
-#endif
+    *pHere++ = DOT_QUOTE_IDX;
+    char *ptr = (char *) pHere;
     for (uint8_t i = 0; i < length; i++) {
-      *(char*)pHere++ = cTokenBuffer[i];
+      *ptr++ = cTokenBuffer[i];
     }
-    *(char*)pHere++ = NULL;    // Terminate String
-#ifdef DEBUG
-    Serial.print(F(": "));
-    Serial.print(str);
-#endif
+    *ptr++ = '\0';    // Terminate String
+    pHere = (cell_t *)ptr;
     ALIGN_P(pHere);  // re- align the pHere for any new code
     cDelimiter = ' ';
   }
@@ -496,32 +435,32 @@ const PROGMEM char two_fetch_str[] = "2@";  // \x40 == '@'
 // Fetch cell pair x1 x2 at a-addr. x2 is at a-addr, and x1 is at a-addr+1
 void _two_fetch(void) { 
   addr_t address = pop();
-  cell_t value = *(unsigned char*)address;
+  cell_t value = *(cell_t *)address;
   push(value);
   address += sizeof(cell_t);
-  value = *(unsigned char*)address;
+  value = *(cell_t *)address;
   push(value);
 }
 
 const PROGMEM char two_drop_str[] = "2drop";
 // ( x1 x2 -- )
-void _two_drop(void) { 
-    pop();
-    pop();
+static void _two_drop(void) {
+  pop();
+  pop();
 }
 
 const PROGMEM char two_dup_str[] = "2dup";
 // ( x1 x2 -- x1 x2 x1 x2 )
 void _two_dup(void) {
-    push(stack[tos - 1]);
-    push(stack[tos - 1]);
+  push(stack[tos - 1]);
+  push(stack[tos - 1]);
 }
 
 const PROGMEM char two_over_str[] = "2over";
 // ( x1 x2 x3 x4 -- x1 x2 x3 x4 x1 x2 )
 void _two_over(void) {
-    push(stack[tos - 3]);
-    push(stack[tos - 2]);
+  push(stack[tos - 3]);
+  push(stack[tos - 2]);
 }
 
 const PROGMEM char two_swap_str[] = "2swap";
@@ -576,11 +515,7 @@ const PROGMEM char lt_number_sign_str[] = "<#";
 // Initialize the pictured numeric output conversion process.
 void _lt_number_sign(void) { 
   pPNO = (char*)pHere + HOLD_SIZE + 1;
-  *pPNO = NULL;
-#ifdef DEBUG
-  Serial.print("pPNO = $");
-  Serial.println((addr_t)pPNO, HEX);
-#endif
+  *pPNO = '\0';
   flags |= NUM_PROC;
 }
 
@@ -606,7 +541,7 @@ const PROGMEM char to_body_str[] = ">body";
 // exists if xt is not for a word defined by CREATE.
 void _to_body(void) {
   cell_t* xt = (cell_t*)pop();
-  if ((cell_t)xt > 0xFF) {
+  if ((addr_t)xt > 0xFF) {
     if (*xt++ == LITERAL_IDX) {
       push(*xt);
       return;
@@ -619,7 +554,7 @@ void _to_body(void) {
 const PROGMEM char to_in_str[] = ">in";
 // ( -- a-addr )
 void _to_in(void) {
-  push((cell_t)&cpToIn); 
+  push((addr_t)&cpToIn); 
 }
 
 const PROGMEM char to_number_str[] = ">number";
@@ -631,15 +566,7 @@ void _to_number(void) {
 const PROGMEM char to_r_str[] = ">r";
 // ( x -- ) (R: -- x )
 void _to_r(void) {
-#ifdef DEBUG
-  cell_t temp = pop();
-  Serial.print(F("  Moving $"));
-  Serial.print(temp, HEX);
-  Serial.print(F(" To Return Stack\r\n"));
-  rPush(temp);
-#else
   rPush(pop());
-#endif
 }
 
 const PROGMEM char question_dup_str[] = "?dup";
@@ -658,13 +585,8 @@ const PROGMEM char fetch_str[] = "@";
 // Fetch cell x1 at a-addr. 
 void _fetch(void) { 
   addr_t address = pop();
-//  if ((address & 1) == 0) {
-    cell_t value = *(cell_t*)address;
-    push(value);
-//  } else {
-//    push(-23);
-//    _throw();
-//  }
+  cell_t value = *(cell_t*)address;
+  push(value);
 }
 
 const PROGMEM char abort_str[] = "abort";
@@ -686,43 +608,20 @@ const PROGMEM char abort_quote_str[] = "abort\x22";
 // preform an implementation-defined abort sequence that included the function
 // of ABORT.
 void _abort_quote(void) {
-  *(cell_t*)pHere = ZJUMP_IDX;
-#ifdef DEBUG
-  debugXT(pHere);
-#endif
-  pHere += sizeof(cell_t);
-  push((cell_t)pHere);  // Push the address for our origin
-  *(cell_t*)pHere = 0;
-#ifdef DEBUG
-  debugXT(pHere);
-#endif
-  pHere += sizeof(cell_t);
+  *pHere++ = ZJUMP_IDX;
+  push((addr_t)pHere);  // Push the address for our origin
+  *pHere++ = 0;
   _dot_quote();
-  *(cell_t*)pHere = LITERAL_IDX;
-#ifdef DEBUG
-  debugXT(pHere);
-#endif
-  pHere += sizeof(cell_t);
-  *(cell_t*)pHere = -2;
-#ifdef DEBUG
-  debugXT(pHere);
-#endif
-  pHere += sizeof(cell_t);
-  *(cell_t*)pHere = THROW_IDX;
-#ifdef DEBUG
-  debugXT(pHere);
-#endif
-  pHere += sizeof(cell_t);
+  *pHere++ = LITERAL_IDX;
+  *pHere++ = -2;
+  *pHere++ = THROW_IDX;
   cell_t* orig = (cell_t*)pop();
-  *orig = (cell_t)pHere - (cell_t)orig;
-#ifdef DEBUG
-  debugValue(pHere);
-#endif
+  *orig = (addr_t)pHere - (addr_t)orig;
 }
 
 const PROGMEM char abs_str[] = "abs";
 // ( n -- u)
-// Runt-Time: 
+// u is the absolutevalue of n 
 void _abs(void) {
   cell_t n = pop();
   push(n < 0 ? 0 - n : n);
@@ -746,8 +645,11 @@ void _align(void) {
 
 const PROGMEM char aligned_str[] = "aligned";
 // ( addr -- a-addr)
+// a-addr is the first aligned address greater than or equal to addr.
 void _aligned(void) {
-  push((pop() + 1) & -2);
+  addr_t addr = pop();
+  ALIGN(addr);
+  push(addr);
 }
 
 const PROGMEM char allot_str[] = "allot";
@@ -756,7 +658,7 @@ const PROGMEM char allot_str[] = "allot";
 // than zero, release |n| address units of data space. If n is zero, leave the 
 // data-space pointer unchanged.
 void _allot(void) {
-  uint8_t* pNewHere = pHere + pop();
+  cell_t* pNewHere = pHere + pop();
   // Check that the new pHere is not outside of the forth space
   if (pNewHere >= &forthSpace[0] &&
       pNewHere < &forthSpace[FORTH_SIZE]) {
@@ -777,7 +679,7 @@ void _and(void) {
 const PROGMEM char base_str[] = "base";
 // ( -- a-addr)
 void _base(void) {
-  push((cell_t)&base);
+  push((addr_t)&base);
 }
 
 const PROGMEM char begin_str[] = "begin";
@@ -788,8 +690,8 @@ const PROGMEM char begin_str[] = "begin";
 // Run-time: ( -- )
 // Continue execution.
 void _begin(void) {
-  push((cell_t)pHere);
-  *(cell_t*)pHere = 0;
+  push((addr_t)pHere);
+  *pHere = 0;
 }
 
 const PROGMEM char bl_str[] = "bl";
@@ -802,8 +704,8 @@ void _bl(void) {
 const PROGMEM char c_store_str[] = "c!";
 // ( char c-addr -- )
 void _c_store(void) {
-  volatile uint8_t* address = (uint8_t*)pop();
-  *address = (uint8_t)pop();
+  uint8_t *addr = (uint8_t*) pop();
+  *addr = (uint8_t)pop();
 }
 
 const PROGMEM char c_comma_str[] = "c,";
@@ -815,14 +717,14 @@ void _c_comma(void) {
 const PROGMEM char c_fetch_str[] = "c@";
 // ( c-addr -- char )
 void _c_fetch(void) {
-  volatile uint8_t *address = (uint8_t*)pop();
-  push(*address);
+  uint8_t *addr = (uint8_t *) pop();
+  push(*addr);
 }
 
 const PROGMEM char cell_plus_str[] = "cell+";
 // ( a-addr1 -- a-addr2 )
 void _cell_plus(void) {
-  push((addr_t)(pop()+ sizeof(cell_t)));
+  push((addr_t)(pop() + sizeof(cell_t)));
 }
 
 const PROGMEM char cells_str[] = "cells";
@@ -837,7 +739,9 @@ const PROGMEM char char_str[] = "char";
 // Skip leading space delimiters. Parse name delimited by a space. Put the value
 // of its first character onto the stack.
 void _char(void) {
-  if(getToken()) push(cTokenBuffer[0]);
+  if(getToken()) {
+    push(cTokenBuffer[0]);
+  }
   else {
     push(-16);
     _throw();
@@ -860,25 +764,17 @@ const PROGMEM char constant_str[] = "constant";
 // ( x"<spaces>name" --  )
 void _constant(void) {
   openEntry();
-  *(cell_t*)pHere = (cell_t)LITERAL_IDX;
-#ifdef DEBUG
-  debugXT(pHere);
-#endif
-  pHere += sizeof(cell_t);
-  *(cell_t*)pHere = pop();
-#ifdef DEBUG
-  debugXT(pHere);
-#endif
-  pHere += sizeof(cell_t);
+  *pHere++ = LITERAL_IDX;
+  *pHere++ = pop();
   closeEntry();
 }
 
 const PROGMEM char count_str[] = "count";
 // ( c-addr1 -- c-addr2 u )
 void _count(void) {
-  char* addr = (char*)pop();
-  push((cell_t)(addr+1));
-  push(*addr);
+  addr_t addr = pop();
+  push(addr + sizeof(cell_t));
+  push(*((cell_t *) addr));
 }
 
 const PROGMEM char cr_str[] = "cr";
@@ -900,16 +796,14 @@ const PROGMEM char create_str[] = "create";
 // be extended by using DOES>.
 void _create(void) {
   openEntry();
-  *(cell_t*)pHere = LITERAL_IDX;
-  pHere += sizeof(cell_t);
+  *pHere++ = LITERAL_IDX;
   // Location of Data Field at the end of the definition.
-  *(cell_t*)pHere = (cell_t)pHere + 3 * sizeof(cell_t); 
-  pHere += sizeof(cell_t);
-  *(cell_t*)pHere = EXIT_IDX;   // Store an extra exit reference so 
-                                // that it can be replace by a 
-                                // subroutine pointer created by DOES>
-  pDoes = (cell_t*)pHere;       // Save this location for uses by subroutine.
-  pHere += sizeof(cell_t);
+  *pHere++ = (addr_t)pHere + 2 * sizeof(cell_t);
+  *pHere = EXIT_IDX;   // Store an extra exit reference so 
+                       // that it can be replace by a 
+                       // subroutine pointer created by DOES>
+  pDoes = pHere;       // Save this location for uses by subroutine.
+  pHere += 1;
   if (!state) closeEntry();           // Close the entry if interpreting
 }
 
@@ -917,7 +811,7 @@ const PROGMEM char decimal_str[] = "decimal";
 // ( -- )
 // Set BASE to 10
 void _decimal(void) { // value --
-  base = 10;
+  base = DECIMAL;
 }
 
 const PROGMEM char depth_str[] = "depth";
@@ -932,12 +826,8 @@ const PROGMEM char do_str[] = "do";
 // Run-Time: ( n1|u1 n2|u2 -- ) (R: -- loop-sys )
 void _do(void) {
   push(DO_SYS);
-  *(cell_t*)pHere = DO_SYS_IDX;
-#ifdef DEBUG
-  debugXT(pHere);
-#endif
-  pHere += sizeof(cell_t);
-  push((cell_t)pHere); // store the origin address of the do loop 
+  *pHere++ = DO_SYS_IDX;
+  push((addr_t)pHere); // store the origin address of the do loop 
 }
 
 const PROGMEM char does_str[] = "does>";
@@ -945,22 +835,10 @@ const PROGMEM char does_str[] = "does>";
 // Run-Time: ( -- ) (R: nest-sys1 -- )
 // Initiation: ( i*x -- i*x a-addr ) (R: -- next-sys2 )
 void _does(void) {
-  *(cell_t*)pHere = SUBROUTINE_IDX;
-#ifdef DEBUG
-  debugXT(pHere);
-#endif
-  pHere += sizeof(cell_t);
+  *pHere++ = SUBROUTINE_IDX;
   // Store location for a subroutine call
-  *(cell_t*)pHere = (cell_t)pHere + 2 * sizeof(cell_t);  
-#ifdef DEBUG
-  debugXT(pHere);
-#endif
-  pHere += sizeof(cell_t);
-  *(cell_t*)pHere = EXIT_IDX;
-#ifdef DEBUG
-  debugXT(pHere);
-#endif
-  pHere += sizeof(cell_t);
+  *pHere++ = (addr_t)pHere + sizeof(cell_t);
+  *pHere++ = EXIT_IDX;
   // Start Subroutine coding
 }
 
@@ -968,14 +846,14 @@ const PROGMEM char drop_str[] = "drop";
 // ( x -- )
 // Remove x from stack
 void _drop(void) {
-    pop();
+  pop();
 }
 
 const PROGMEM char dupe_str[] = "dup";
 // ( x -- x x )
 // Duplicate x
 void _dupe(void) { 
-    push(stack[tos]);
+  push(stack[tos]);
 }
 
 const PROGMEM char else_str[] = "else";
@@ -984,17 +862,9 @@ const PROGMEM char else_str[] = "else";
 // Run-Time: ( -- )
 void _else(void) {
   cell_t* orig = (cell_t*)pop();
-  *(cell_t*)pHere = JUMP_IDX;
-#ifdef DEBUG
-  debugXT(pHere);
-#endif
-  pHere += sizeof(cell_t);
-  push((cell_t)pHere);
-  pHere += sizeof(cell_t);
-  *orig = (cell_t)pHere - (cell_t)orig;
-#ifdef DEBUG
-  debugValue(orig);
-#endif
+  *pHere++ = JUMP_IDX;
+  push((addr_t)pHere);
+  *orig = (addr_t)pHere - (addr_t)orig;
 }
 
 const PROGMEM char emit_str[] = "emit";
@@ -1017,9 +887,9 @@ const PROGMEM char environment_str[] = "environment?";
 void _environment(void) {
   char length = (char)pop();
   char* pStr = (char*)pop();
-  if (length && length < STRING_SIZE) {
+  if (length && length < BUFFER_SIZE) {
     if (!strcmp_P(pStr, PSTR("/counted-string"))) {
-      push(STRING_SIZE);
+      push(BUFFER_SIZE);
       return;
     }
     if (!strcmp_P(pStr, PSTR("/hold"))) {
@@ -1027,15 +897,15 @@ void _environment(void) {
       return;
     }
     if (!strcmp_P(pStr, PSTR("address-unit-bits"))) {
-      push(ADDRESS_BITS); 
+      push(sizeof(addr_t)*8); 
       return;
     }
     if (!strcmp_P(pStr, PSTR("core"))) {
-      push(FALSE); 
+      push(CORE); 
       return;
     }
     if (!strcmp_P(pStr, PSTR("core-ext"))) {
-      push(FALSE); 
+      push(CORE_EXT); 
       return;
     }
     if (!strcmp_P(pStr, PSTR("floored"))) {
@@ -1046,22 +916,26 @@ void _environment(void) {
       push(MAX_CHAR); 
       return;
     }
+#if DOUBLE
     if (!strcmp_P(pStr, PSTR("max-d"))) {
-      push(MAX_D); 
+      push(MAX_OF(dcell_t)); 
       return;
     }
+#endif
     if (!strcmp_P(pStr, PSTR("max-n"))) {
-      push(MAX_N); 
+      push(MAX_OF(cell_t)); 
       return;
     }
     if (!strcmp_P(pStr, PSTR("max-u"))) {
-      push(MAX_U); 
+      push(MAX_OF(ucell_t)); 
       return;
     }
+#if DOUBLE
     if (!strcmp_P(pStr, PSTR("max-ud"))) {
-      push(MAX_UD); 
+      push(MAX_OF(udcell_t)); 
       return;
     }
+#endif
     if (!strcmp_P(pStr, PSTR("return-stack-size"))) {
       push(RSTACK_SIZE); 
       return;
@@ -1086,7 +960,7 @@ void _evaluate(void) {
   char* tempSource = cpSource;
   char* tempSourceEnd = cpSourceEnd;
   char* tempToIn = cpToIn;
-  
+
   uint8_t length = pop();
   cpSource = (char*)pop();
   cpSourceEnd = cpSource + length;
@@ -1105,11 +979,12 @@ void _execute(void) {
   func function;
   w = pop();
   if (w > 255) {
-    rPush(0);            // Push 0 as our return address
+    // rpush(0);
+    rPush((cell_t) ip);        // CAL - Push our return address
     ip = (cell_t *)w;          // set the ip to the XT (memory location)
     executeWord();
   } else {
-    function = (func) pgm_read_word(&(flashDict[w - 1].function));
+    function = (func) pgm_read_word(&flashDict[w - 1].function);
     function();
     if (errorCode) return;
   }
@@ -1123,9 +998,6 @@ const PROGMEM char exit_str[] = "exit";
 // parameters by executing UNLOOP.
 void _exit(void) {
   ip = (cell_t*)rPop();
-#ifdef DEBUG
-  debugNewIP();
-#endif
 }
 
 const PROGMEM char fill_str[] = "fill";
@@ -1150,13 +1022,15 @@ const PROGMEM char find_str[] = "find";
 void _find(void) {
   uint8_t index = 0;
 
-  char* ptr = (char*)pop();
-  uint8_t length = *ptr++;
+  cell_t *addr = (cell_t *)pop();
+  cell_t length = *addr++;
+
+  char *ptr = (char*) addr;
   if (length = 0) {
     push(-16);
     _throw();
     return;
-  } else if (length > STRING_SIZE) {
+  } else if (length > BUFFER_SIZE) {
     push(-18);
     _throw();
     return;
@@ -1167,13 +1041,8 @@ void _find(void) {
   while(pUserEntry) {
     if (strcmp(pUserEntry->name, ptr) == 0) {
       length = strlen(pUserEntry->name);
- //     w = (cell_t)pUserEntry + length + 4;
- //     // Align the address in w
- //     ALIGN(w);
- //     push(w);
       push(pUserEntry->cfa);
       wordFlags = pUserEntry->flags;
-//      if(pUserEntry->flags & IMMEDIATE) push(1);
       if(wordFlags & IMMEDIATE) push(1);
       else push(-1);
       return;
@@ -1181,18 +1050,17 @@ void _find(void) {
     pUserEntry = (userEntry_t*)pUserEntry->prevEntry;
   }
   // Second Search through the flash Dictionary
-  while(pgm_read_word(&(flashDict[index].name))) {
-    if (!strcasecmp_P(ptr, (char*) pgm_read_word(&(flashDict[index].name)))) {
+  while(pgm_read_word(&flashDict[index].name)) {
+    if (!strcasecmp_P(ptr, (char*)pgm_read_word(&flashDict[index].name))) {
       push(index + 1);
       wordFlags = pgm_read_byte(&(flashDict[index].flags)); 
-//      if(pgm_read_byte(&(flashDict[index].flags)) & IMMEDIATE) push(1);
       if(wordFlags & IMMEDIATE) push(1);
       else push(-1);
       return;                               
     }
     index++;
   }
-  push((cell_t)ptr);
+  push((addr_t)ptr);
   push(0);
 }
 
@@ -1210,7 +1078,7 @@ const PROGMEM char here_str[] = "here";
 // ( -- addr )
 // addr is the data-space pointer.
 void _here(void) {
-  push((cell_t)pHere);
+  push((addr_t)pHere);
 }
 
 const PROGMEM char hold_str[] = "hold";
@@ -1233,17 +1101,9 @@ const PROGMEM char if_str[] = "if";
 // Compilation: (C: -- orig )
 // Run-Time: ( x -- )
 void _if(void) {
-  *(cell_t*)pHere = ZJUMP_IDX;
-#ifdef DEBUG
-  debugXT(pHere);
-#endif
-  pHere += sizeof(cell_t);
-  *(cell_t*)pHere = 0;
-  push((cell_t)pHere);
-#ifdef DEBUG
-  debugXT(pHere);
-#endif
-  pHere +=sizeof(cell_t);
+  *pHere++ = ZJUMP_IDX;
+  *pHere = 0;
+  push((cell_t)pHere++);
 }
 
 const PROGMEM char immediate_str[] = "immediate";
@@ -1282,17 +1142,9 @@ const PROGMEM char leave_str[] = "leave";
 // Interpretation: undefined
 // Execution: ( -- ) (R: loop-sys -- )
 void _leave(void) {
-  *(cell_t*)pHere = LEAVE_SYS_IDX;
-#ifdef DEBUG
-  debugXT(pHere);
-#endif
-  pHere +=sizeof(cell_t);
-  push((cell_t)pHere);
-  *(cell_t*)pHere = 0;
-#ifdef DEBUG
-  debugXT(pHere);
-#endif
-  pHere +=sizeof(cell_t);
+  *pHere++ = LEAVE_SYS_IDX;
+  push((addr_t)pHere);
+  *pHere++ = 0;
   _swap();
 }
 
@@ -1303,16 +1155,8 @@ const PROGMEM char literal_str[] = "literal";
 // Place x on the stack
 void _literal(void) {
   if (state) {
-    *(cell_t*)pHere = (cell_t)LITERAL_IDX;
-#ifdef DEBUG
-    debugXT((cell_t*)pHere);
-#endif
-    pHere += sizeof(cell_t);
-    *(cell_t*)pHere = pop();
-#ifdef DEBUG
-    debugXT(pHere);
-#endif
-    pHere += sizeof(cell_t);
+    *pHere++ = LITERAL_IDX;
+    *pHere++ = pop();
   } else {
     push(*ip++);
   } 
@@ -1323,20 +1167,12 @@ const PROGMEM char loop_str[] = "loop";
 // Compilation: (C: do-sys -- )
 // Run-Time: ( -- ) (R: loop-sys1 -- loop-sys2 )
 void _loop(void) {
-  *(cell_t*)pHere = LOOP_SYS_IDX;
-#ifdef DEBUG
-  debugXT(pHere);
-#endif
-  pHere += sizeof(cell_t);
-  *(cell_t*)pHere = pop();
-#ifdef DEBUG
-  debugXT(pHere);
-#endif
-  pHere += sizeof(cell_t);
+  *pHere++ = LOOP_SYS_IDX;
+  *pHere++ = pop();
   cell_t* leave = (cell_t*)pop();
   if (leave != (cell_t*)DO_SYS) {
     if (stack[tos] == DO_SYS) {
-      *leave = (ucell_t)pHere;
+      *leave = (addr_t)pHere;
       pop();
     } else {
       push(-22);
@@ -1420,7 +1256,7 @@ void _or(void) {
 const PROGMEM char over_str[] = "over";
 // ( x y -- x y x )
 void _over(void) { 
-    push(stack[tos - 1]);
+  push(stack[tos - 1]);
 }
 
 const PROGMEM char postpone_str[] = "postpone";
@@ -1441,16 +1277,12 @@ void _postpone(void) {
         ip = (cell_t *)w;          // set the ip to the XT (memory location)
         executeWord();
       } else {
-        function = (func) pgm_read_word(&(flashDict[w - 1].function));
+        function = (func) pgm_read_word(&flashDict[w - 1].function);
         function();
         if (errorCode) return;
       }
     } else {
-      *(cell_t*)pHere = (cell_t)w;
-#ifdef DEBUG
-      debugXT(pHere);
-#endif
-      pHere += sizeof(cell_t);
+      *pHere++ = (cell_t)w;
     }
   } else {
     push(-13);
@@ -1474,15 +1306,7 @@ const PROGMEM char r_from_str[] = "r>";
 // Execution: ( -- x ) (R: x -- )
 // move x from the return stack to the data stack.
 void _r_from(void) {
-#ifdef DEBUG
-  ucell_t temp = rPop();
-  Serial.print(F("  Moving $"));
-  Serial.print(temp, HEX);
-  Serial.print(F(" To Data Stack\r\n"));
-  push(temp);
-#else
   push(rPop());
-#endif
 }
 
 const PROGMEM char r_fetch_str[] = "r@";
@@ -1500,11 +1324,7 @@ const PROGMEM char recurse_str[] = "recurse";
 // definition. An ambiguous condition exists if RECURSE appends in a definition 
 // after DOES>.
 void _recurse(void) { 
-  *(cell_t*)pHere = (cell_t)pCodeStart;
-#ifdef DEBUG
-  debugXT(pHere);
-#endif
-  pHere += sizeof(cell_t);
+  *pHere++ = (addr_t)pCodeStart;
 }
 
 const PROGMEM char repeat_str[] = "repeat";
@@ -1515,21 +1335,10 @@ const PROGMEM char repeat_str[] = "repeat";
 void _repeat(void) { 
   cell_t dest;
   cell_t* orig;
-  *(cell_t*)pHere = JUMP_IDX;
-#ifdef DEBUG
-  debugXT(pHere);
-#endif
-  pHere += sizeof(cell_t);
-  *(cell_t*)pHere = pop() - (cell_t)pHere;
-#ifdef DEBUG
-  debugXT(pHere);
-#endif
-  pHere += sizeof(cell_t);
+  *pHere++ = JUMP_IDX;
+  *pHere++ = pop() - (addr_t)pHere;
   orig = (cell_t*)pop();
-  *orig = (cell_t)pHere - (cell_t)orig;
-#ifdef DEBUG
-  debugValue(orig);
-#endif
+  *orig = (addr_t)pHere - (addr_t)orig;
 }
 
 const PROGMEM char rot_str[] = "rot";
@@ -1564,11 +1373,11 @@ void _s_quote(void) {
   uint8_t i;
   char length;
   if (flags & EXECUTE) {
-    push((cell_t)ip);
+    push((addr_t)ip);
     cell_t len = strlen((char*)ip);
     push(len++);    // increment for the null terminator
     ALIGN(len);
-    ip = (cell_t*)((cell_t)ip + len);
+    ip = (cell_t*)((addr_t)ip + len);
   }
   else if (state) {
     cDelimiter = '"';
@@ -1577,25 +1386,14 @@ void _s_quote(void) {
       _throw();
     }
     length = strlen(cTokenBuffer);
-    *(cell_t*)pHere = (cell_t)S_QUOTE_IDX;
-  #ifdef DEBUG
-    debugXT(pHere);
-  #endif
-    pHere += sizeof(cell_t);
-#ifdef DEBUG
-    Serial.print(F("\r\n  String @ $"));
-    char* str = (char*)pHere;
-    Serial.print((ucell_t)str, HEX);
-#endif
+    *pHere++ = S_QUOTE_IDX;
+    char *ptr = (char*)pHere;
     for (uint8_t i = 0; i < length; i++) {
-      *(char*)pHere++ = cTokenBuffer[i];
+      *ptr++ = cTokenBuffer[i];
     }
-    *(char*)pHere++ = NULL;    // Terminate String
-#ifdef DEBUG
-    Serial.print(F(": "));
-    Serial.print(str);
-#endif
-    ALIGN_P(pHere);  // re- align the pHere for any new code
+    *ptr++ = '\0';    // Terminate String
+    pHere = (cell_t *)ptr;
+    ALIGN_P(pHere);  // re- align pHere for any new code
     cDelimiter = ' ';
   }
 }
@@ -1631,7 +1429,7 @@ const PROGMEM char source_str[] = "source";
 // ( -- c-addr u )
 // c-addr is the address of, and u is the number of characters in, the input buffer.
 void _source(void) {
-  push((cell_t)&cInputBuffer);
+  push((addr_t)&cInputBuffer);
   push(strlen(cInputBuffer));
 }
 
@@ -1656,13 +1454,13 @@ const PROGMEM char state_str[] = "state";
 // ( -- a-addr )
 // a-addr is the address of the cell containing compilation state flag.
 void _state(void) {
-  push((cell_t)&state);
+  push((addr_t)&state);
 }
 
 const PROGMEM char swap_str[] = "swap";
 void _swap(void) { // x y -- y x
   cell_t x, y;
-  
+
   y = pop();
   x = pop();
   push(y);
@@ -1675,10 +1473,7 @@ const PROGMEM char then_str[] = "then";
 // Run-Time: ( -- )
 void _then(void) {
   cell_t* orig = (cell_t*)pop();
-  *orig = (cell_t)pHere - (cell_t)orig;
-#ifdef DEBUG
-  debugValue(orig);
-#endif
+  *orig = (addr_t)pHere - (addr_t)orig;
 }
 
 const PROGMEM char type_str[] = "type";
@@ -1687,9 +1482,6 @@ const PROGMEM char type_str[] = "type";
 void _type(void) {
   uint8_t length = (uint8_t)pop();
   char* addr = (char*)pop();
-#ifdef DEBUG
-  _cr();
-#endif
   for (char i = 0; i < length; i++) 
     Serial.print(*addr++);
 }
@@ -1750,16 +1542,9 @@ const PROGMEM char until_str[] = "until";
 // Compilation: (C: dest -- )
 // Run-Time: ( x -- )
 void _until(void) {
-  *(cell_t*)pHere = ZJUMP_IDX;
-#ifdef DEBUG
-  debugXT(pHere);
-#endif
-  pHere += sizeof(cell_t);
-  *(cell_t*)pHere = pop() - (cell_t)pHere;
-#ifdef DEBUG
-  debugValue(pHere);
-#endif
-  pHere += sizeof(cell_t);
+  *pHere++ = ZJUMP_IDX;
+  *pHere = pop() - (size_t)pHere;
+  pHere += 1;
 }
 
 const PROGMEM char variable_str[] = "variable";
@@ -1772,19 +1557,11 @@ const PROGMEM char variable_str[] = "variable";
 // initializing the contents of a reserved cell.
 void _variable(void) {
   if (flags & EXECUTE) {
-    push((cell_t)ip++);    
+    push((addr_t)ip++);    
   } else {
     openEntry();
-    *(cell_t*)pHere = (cell_t)VARIABLE_IDX;
-#ifdef DEBUG
-    debugXT(pHere);
-#endif
-    pHere += sizeof(cell_t);
-    *(cell_t*)pHere = 0;
-#ifdef DEBUG
-    debugXT(pHere);
-#endif
-    pHere += sizeof(cell_t);
+    *pHere++ = VARIABLE_IDX;
+    *pHere++ = 0;
     closeEntry();
   }
 }
@@ -1797,17 +1574,9 @@ void _while(void) {
   ucell_t dest;
   ucell_t orig;
   dest = pop();
-  *(cell_t*)pHere = ZJUMP_IDX;
-#ifdef DEBUG
-  debugXT(pHere);
-#endif
-  pHere += sizeof(cell_t);
-  orig = (cell_t)pHere;
-  *(cell_t*)pHere = 0;
-#ifdef DEBUG
-  debugXT(pHere);
-#endif
-  pHere += sizeof(cell_t);
+  *pHere++ = ZJUMP_IDX;
+  orig = (addr_t)pHere;
+  *pHere++ = 0;
   push(orig);
   push(dest);
 }
@@ -1828,21 +1597,19 @@ const PROGMEM char word_str[] = "word";
 // included as a concession to existing programs that use CONVERT. A program shall 
 // not depend on the existence of the space.
 void _word(void) {
-  uint8_t* start;
-//  char* cPtr = &cTokenBuffer[1];
+  uint8_t *start, *ptr;
+
   cDelimiter = (char)pop();
-  start = pHere++;
+  start = (uint8_t *)pHere++;
+  ptr = (uint8_t *)pHere;
   while(cpToIn <= cpSourceEnd) {
     if (*cpToIn == cDelimiter || *cpToIn == 0) {
-      *start = (pHere - start) - 1;       // write the length byte
-//      cTokenBuffer[0] = (cPtr - cTokenBuffer) - 1;       // write the length byte
-      pHere = start;                      // reset pHere (transient memory)
-      push((cell_t)start);                // push the c-addr onto the stack
-//      push((cell_t)cPtr);                   // push the c-addr onto the stack
+      *((cell_t *)start) = (ptr - start) - sizeof(cell_t); // write the length byte
+      pHere = (cell_t *)start;                     // reset pHere (transient memory)
+      push((addr_t)start);                // push the c-addr onto the stack
       cpToIn++;
       break;      
-    } else *pHere++ = *cpToIn++;
-//    } else *cPtr++ = *cpToIn++;
+    } else *ptr++ = *cpToIn++;
   }
   cDelimiter = ' ';
 }
@@ -1878,11 +1645,9 @@ void _bracket_tick(void) {
     push(-16);
     _throw();
   }
-  if(isWord(cTokenBuffer)) {
-    *(cell_t*)pHere = LITERAL_IDX;
-    pHere += sizeof(cell_t);
-    *(cell_t*)pHere = w;
-    pHere += sizeof(cell_t);
+  if (isWord(cTokenBuffer)) {
+    *pHere++ = LITERAL_IDX;
+    *pHere++ = w;
   } else {
     push(-13);
     _throw();
@@ -1898,11 +1663,9 @@ const PROGMEM char bracket_char_str[] = "[char]";
 // Run-Time: ( -- char )
 // Place char, the value of the first character of name, on the stack.
 void _bracket_char(void) {
-  if(getToken()) {
-    *(cell_t*)pHere = LITERAL_IDX;
-    pHere += sizeof(cell_t);
-    *(cell_t*)pHere = cTokenBuffer[0];
-    pHere += sizeof(cell_t);
+  if (getToken()) {
+    *pHere++ = LITERAL_IDX;
+    *pHere++ = cTokenBuffer[0];
   } else {
     push(-16);
     _throw();
@@ -1924,11 +1687,12 @@ const PROGMEM char neq_str[] = "<>";
 void _neq(void) { 
   push(pop() != pop()); 
 }
+
 const PROGMEM char hex_str[] = "hex";
 // ( -- )
 // Set BASE to 16
 void _hex(void) { // value --
-  base = 16;
+  base = HEX;
 }
 #endif
 
@@ -1950,12 +1714,12 @@ const PROGMEM char throw_str[] = "throw";
 void _throw(void) {
   errorCode = pop();
   uint8_t index = 0;
-  int8_t tableCode;
+  int tableCode;
   //_cr();
   Serial.print(cTokenBuffer);
   Serial.print(F(" EXCEPTION("));
   do{
-    tableCode = pgm_read_byte(&(exception[index].code));
+    tableCode = pgm_read_word(&(exception[index].code));
     if (errorCode == tableCode) {
       Serial.print((int)errorCode);
       Serial.print(F("): "));
@@ -2010,14 +1774,14 @@ void _dump(void) {
   addr_t addr_end = addr_start;
   addr_end += len;
   addr_start = addr_start & 0xFFF0;
-  
+
   volatile uint8_t* addr = (uint8_t*)addr_start;
-  
+
   while (addr < (uint8_t*)addr_end) {
     Serial.print(F("\r\n$"));
     if (addr < (uint8_t*)0x10) serial_print_P(zero_str);
     if (addr < (uint8_t*)0x100) serial_print_P(zero_str);
-    Serial.print((addr_t)addr, HEX);
+    Serial.print((size_t)addr, HEX);
     serial_print_P(sp_str);
     for (uint8_t i = 0; i < 16; i++) {
       if (*addr < 0x10) serial_print_P(zero_str);
@@ -2040,7 +1804,9 @@ const PROGMEM char see_str[] = "see";
 // Display a human-readable representation of the named word's definition. The
 // source of the representation (object-code decompilation, source block, etc.)
 // and the particular form of the display in implementation defined.
-void _see(void) { 
+void _see(void) {
+  bool isLiteral, done;
+
   _tick();
   if (errorCode) return;
   char flags = wordFlags;
@@ -2052,17 +1818,19 @@ void _see(void) {
   } else {
     cell_t* addr = (cell_t*)xt;
     Serial.print(F("\r\nCode Field Address: "));
-    Serial.print((addr_t)addr);
+    Serial.print((size_t)addr);
     Serial.print(F("\r\nAddr\tXT\tName"));
     do {
+      isLiteral = done = false;
       Serial.print(F("\r\n$"));
-      Serial.print((cell_t)addr, HEX);
+      Serial.print((size_t)addr, HEX);
       serial_print_P(tab_str);
       Serial.print(*addr);
       serial_print_P(tab_str);
       xtToName(*addr);
       switch (*addr) {
         case 2:
+          isLiteral = true;
         case 4:
         case 5:
           Serial.print(F("("));
@@ -2077,12 +1845,15 @@ void _see(void) {
             Serial.print(*ptr++);
           } while (*ptr != 0);
           Serial.print(F("\x22"));
-          addr = (cell_t*)++ptr;
-          addr = (cell_t*)(((cell_t)addr - 1) & -2);
+          addr = (cell_t *)++ptr;
+          ALIGN_P(addr);
           break;
       }
-    } while (*addr++ != 1);
-  }  
+      // We're done if exit code but not a literal with value of one
+      done = ((*addr++ == 1) && (! isLiteral));
+    } while (! done);
+  }
+  Serial.println();
 }
 
 const PROGMEM char words_str[] = "words";
@@ -2091,29 +1862,27 @@ void _words(void) { // --
   uint8_t index = 0;
   uint8_t length = 0;
   char* pChar;
-  
-  while (pgm_read_word(&(flashDict[index].name))) {
-      if (count > 70) {
-          Serial.println();
-          count = 0;
-      }
-      if (!(pgm_read_word(&(flashDict[index].flags)) & SMUDGE)) {
-        count += serial_print_P((char*) pgm_read_word(&(flashDict[index].name)));
-//        count += Serial.print(F(" "));
-        count += serial_print_P(sp_str);
-      }
-      index++;
+
+  while (pgm_read_word(&flashDict[index].name)) {
+    if (count > 70) {
+      Serial.println();
+      count = 0;
+    }
+    if (!(pgm_read_byte(&(flashDict[index].flags)) & SMUDGE)) {
+      count += serial_print_P((char*)pgm_read_word(&flashDict[index].name));
+      count += serial_print_P(sp_str);
+    }
+    index++;
   }
   
   pUserEntry = pLastUserEntry;
   while(pUserEntry) {
     if (count > 70) {
-        Serial.println();
-        count = 0;
+      Serial.println();
+      count = 0;
     }
     if (!(pUserEntry->flags & SMUDGE)) {
       count += Serial.print(pUserEntry->name);
-//      count += Serial.print(F(" "));
       count += serial_print_P(sp_str);
     }
     pUserEntry = (userEntry_t*)pUserEntry->prevEntry;
@@ -2213,160 +1982,161 @@ void _toName(void) {
 /**                         Dictionary Initialization                           **/
 /*********************************************************************************/
 const PROGMEM flashEntry_t flashDict[] = {
-    /*****************************************************/
-    /* The initial entries must stay in this order so    */
-    /* they always have the same index. They get called  */
-    /* referenced when compiling code                    */
-    /*****************************************************/
-    { exit_str,           _exit,            NORMAL },
-    { literal_str,        _literal,         IMMEDIATE },
-    { type_str,           _type,            NORMAL },
-    { jump_str,           _jump,            SMUDGE },
-    { zjump_str,          _zjump,           SMUDGE },
-    { subroutine_str,     _subroutine,      SMUDGE },
-    { throw_str,          _throw,           NORMAL },
-    { do_sys_str,         _do_sys,          SMUDGE },
-    { loop_sys_str,       _loop_sys,        SMUDGE },
-    { leave_sys_str,      _leave_sys,       SMUDGE },
-    { plus_loop_sys_str,  _plus_loop_sys,   SMUDGE },
-    { evaluate_str,       _evaluate,        NORMAL },
-    { s_quote_str,        _s_quote,         IMMEDIATE + COMP_ONLY },
-    { dot_quote_str,      _dot_quote,       IMMEDIATE + COMP_ONLY },
-    { variable_str,       _variable,        NORMAL },
-    
-    /*****************************************************/
-    /* Order does not matter after here                  */
-    /*****************************************************/    
-    { abort_str,          _abort,           NORMAL },
-    { store_str,          _store,           NORMAL },
-    { number_sign_str,    _number_sign,     NORMAL },
-    { number_sign_gt_str, _number_sign_gt,  NORMAL },
-    { number_sign_s_str,  _number_sign_s,   NORMAL },
-    { tick_str,           _tick,            NORMAL },
-    { paren_str,          _paren,           IMMEDIATE },
-    { star_str,           _star,            NORMAL },
-    { star_slash_str,     _star_slash,      NORMAL },
-    { star_slash_mod_str, _star_slash_mod,  NORMAL },
-    { plus_str,           _plus,            NORMAL },
-    { plus_store_str,     _plus_store,      NORMAL },
-    { plus_loop_str,      _plus_loop,       IMMEDIATE + COMP_ONLY },
-    { comma_str,          _comma,           NORMAL },
-    { minus_str,          _minus,           NORMAL },
-    { dot_str,            _dot,             NORMAL },
-    { slash_str,          _slash,           NORMAL },
-    { slash_mod_str,      _slash_mod,       NORMAL },
-    { zero_less_str,      _zero_less,       NORMAL },
-    { zero_equal_str,     _zero_equal,      NORMAL },
-    { one_plus_str,       _one_plus,        NORMAL },
-    { one_minus_str,      _one_minus,       NORMAL },
-    { two_store_str,      _two_store,       NORMAL },
-    { two_star_str,       _two_star,        NORMAL },
-    { two_slash_str,      _two_slash,       NORMAL },
-    { two_fetch_str,      _two_fetch,       NORMAL },
-    { two_drop_str,       _two_drop,        NORMAL },
-    { two_dup_str,        _two_dup,         NORMAL },
-    { two_over_str,       _two_over,        NORMAL },
-    { two_swap_str,       _two_swap,        NORMAL },
-    { colon_str,          _colon,           NORMAL },
-    { semicolon_str,      _semicolon,       IMMEDIATE }, 
-    { lt_str,             _lt,              NORMAL },
-    { lt_number_sign_str, _lt_number_sign,  NORMAL },
-    { eq_str,             _eq,              NORMAL },
-    { gt_str,             _gt,              NORMAL },
-    { to_body_str,        _to_body,         NORMAL },
-    { to_in_str,          _to_in,           NORMAL },
-    { to_number_str,      _to_number,       NORMAL },
-    { to_r_str,           _to_r,            NORMAL },
-    { question_dup_str,   _question_dup,    NORMAL },
-    { fetch_str,          _fetch,           NORMAL },
-    { abort_quote_str,    _abort_quote,     IMMEDIATE + COMP_ONLY },
-    { abs_str,            _abs,             NORMAL },
-    { accept_str,         _accept,          NORMAL },
-    { align_str,          _align,           NORMAL },
-    { aligned_str,        _aligned,         NORMAL },
-    { allot_str,          _allot,           NORMAL },
-    { and_str,            _and,             NORMAL },
-    { base_str,           _base,            NORMAL },
-    { begin_str,          _begin,           IMMEDIATE + COMP_ONLY },
-    { bl_str,             _bl,              NORMAL },
-    { c_store_str,        _c_store,         NORMAL },
-    { c_comma_str,        _c_comma,         NORMAL },
-    { c_fetch_str,        _c_fetch,         NORMAL },
-    { cell_plus_str,      _cell_plus,       NORMAL },
-    { cells_str,          _cells,           NORMAL },
-    { char_str,           _char,            NORMAL },
-    { char_plus_str,      _char_plus,       NORMAL },
-    { chars_str,          _chars,           NORMAL },
-    { constant_str,       _constant,        NORMAL },
-    { count_str,          _count,           NORMAL },
-    { cr_str,             _cr,              NORMAL },
-    { create_str,         _create,          NORMAL },
-    { decimal_str,        _decimal,         NORMAL },
-    { depth_str,          _depth,           NORMAL },
-    { do_str,             _do,              IMMEDIATE + COMP_ONLY },
-    { does_str,           _does,            IMMEDIATE + COMP_ONLY },
-    { drop_str,           _drop,            NORMAL },
-    { dupe_str,           _dupe,            NORMAL },
-    { else_str,           _else,            IMMEDIATE + COMP_ONLY },
-    { emit_str,           _emit,            NORMAL },
-    { environment_str,    _environment,     NORMAL },
-    { execute_str,        _execute,         NORMAL },
-    { fill_str,           _fill,            NORMAL },
-    { find_str,           _find,            NORMAL },
-    { fm_slash_mod_str,   _fm_slash_mod,    NORMAL },
-    { here_str,           _here,            NORMAL },
-    { hold_str,           _hold,            NORMAL },
-    { i_str,              _i,               NORMAL },
-    { if_str,             _if,              IMMEDIATE + COMP_ONLY },
-    { immediate_str,      _immediate,       NORMAL },
-    { invert_str,         _invert,          NORMAL },
-    { j_str,              _j,               NORMAL },
-    { key_str,            _key,             NORMAL },
-    { leave_str,          _leave,           IMMEDIATE + COMP_ONLY },
-    { loop_str,           _loop,            IMMEDIATE + COMP_ONLY },
-    { lshift_str,         _lshift,          NORMAL },
-    { m_star_str,         _m_star,          NORMAL },
-    { max_str,            _max,             NORMAL },
-    { min_str,            _min,             NORMAL },
-    { mod_str,            _mod,             NORMAL },
-    { move_str,           _move,            NORMAL },
-    { negate_str,         _negate,          NORMAL },
-    { or_str,             _or,              NORMAL },
-    { over_str,           _over,            NORMAL },
-    { postpone_str,       _postpone,        IMMEDIATE + COMP_ONLY },
-    { quit_str,           _quit,            NORMAL },
-    { r_from_str,         _r_from,          NORMAL },
-    { r_fetch_str,        _r_fetch,         NORMAL },
-    { recurse_str,        _recurse,         IMMEDIATE + COMP_ONLY },
-    { repeat_str,         _repeat,          IMMEDIATE + COMP_ONLY },
-    { rot_str,            _rot,             NORMAL },
-    { rshift_str,         _rshift,          NORMAL },
-    { s_to_d_str,         _s_to_d,          NORMAL },
-    { sign_str,           _sign,            NORMAL },
-    { sm_slash_rem_str,   _sm_slash_rem,    NORMAL },
-    { source_str,         _source,          NORMAL },
-    { space_str,          _space,           NORMAL },
-    { spaces_str,         _spaces,          NORMAL },
-    { state_str,          _state,           NORMAL },
-    { swap_str,           _swap,            NORMAL },
-    { then_str,           _then,            IMMEDIATE + COMP_ONLY },
-    { u_dot_str,          _u_dot,           NORMAL },
-    { u_lt_str,           _u_lt,            NORMAL },
-    { um_star_str,        _um_star,         NORMAL },
-    { um_slash_mod_str,   _um_slash_mod,    NORMAL },
-    { unloop_str,         _unloop,          NORMAL + COMP_ONLY },
-    { until_str,          _until,           IMMEDIATE + COMP_ONLY },
-    { while_str,          _while,           IMMEDIATE + COMP_ONLY },
-    { word_str,           _word,            NORMAL },
-    { xor_str,            _xor,             NORMAL },
-    { left_bracket_str,   _left_bracket,    IMMEDIATE },
-    { bracket_tick_str,   _bracket_tick,    IMMEDIATE },
-    { bracket_char_str,   _bracket_char,    IMMEDIATE },
-    { right_bracket_str,  _right_bracket,   NORMAL },
+  /*****************************************************/
+  /* The initial entries must stay in this order so    */
+  /* they always have the same index. They get called  */
+  /* referenced when compiling code                    */
+  /*****************************************************/
+  { exit_str,           _exit,            NORMAL },
+  { literal_str,        _literal,         IMMEDIATE },
+  { type_str,           _type,            NORMAL },
+  { jump_str,           _jump,            SMUDGE },
+  { zjump_str,          _zjump,           SMUDGE },
+  { subroutine_str,     _subroutine,      SMUDGE },
+  { throw_str,          _throw,           NORMAL },
+  { do_sys_str,         _do_sys,          SMUDGE },
+  { loop_sys_str,       _loop_sys,        SMUDGE },
+  { leave_sys_str,      _leave_sys,       SMUDGE },
+  { plus_loop_sys_str,  _plus_loop_sys,   SMUDGE },
+  { evaluate_str,       _evaluate,        NORMAL },
+  { s_quote_str,        _s_quote,         IMMEDIATE + COMP_ONLY },
+  { dot_quote_str,      _dot_quote,       IMMEDIATE + COMP_ONLY },
+  { variable_str,       _variable,        NORMAL },
+
+  /*****************************************************/
+  /* Order does not matter after here                  */
+  /* Core Words                                        */
+  /*****************************************************/
+  { abort_str,          _abort,           NORMAL },
+  { store_str,          _store,           NORMAL },
+  { number_sign_str,    _number_sign,     NORMAL },
+  { number_sign_gt_str, _number_sign_gt,  NORMAL },
+  { number_sign_s_str,  _number_sign_s,   NORMAL },
+  { tick_str,           _tick,            NORMAL },
+  { paren_str,          _paren,           IMMEDIATE },
+  { star_str,           _star,            NORMAL },
+  { star_slash_str,     _star_slash,      NORMAL },
+  { star_slash_mod_str, _star_slash_mod,  NORMAL },
+  { plus_str,           _plus,            NORMAL },
+  { plus_store_str,     _plus_store,      NORMAL },
+  { plus_loop_str,      _plus_loop,       IMMEDIATE + COMP_ONLY },
+  { comma_str,          _comma,           NORMAL },
+  { minus_str,          _minus,           NORMAL },
+  { dot_str,            _dot,             NORMAL },
+  { slash_str,          _slash,           NORMAL },
+  { slash_mod_str,      _slash_mod,       NORMAL },
+  { zero_less_str,      _zero_less,       NORMAL },
+  { zero_equal_str,     _zero_equal,      NORMAL },
+  { one_plus_str,       _one_plus,        NORMAL },
+  { one_minus_str,      _one_minus,       NORMAL },
+  { two_store_str,      _two_store,       NORMAL },
+  { two_star_str,       _two_star,        NORMAL },
+  { two_slash_str,      _two_slash,       NORMAL },
+  { two_fetch_str,      _two_fetch,       NORMAL },
+  { two_drop_str,       _two_drop,        NORMAL },
+  { two_dup_str,        _two_dup,         NORMAL },
+  { two_over_str,       _two_over,        NORMAL },
+  { two_swap_str,       _two_swap,        NORMAL },
+  { colon_str,          _colon,           NORMAL },
+  { semicolon_str,      _semicolon,       IMMEDIATE },
+  { lt_str,             _lt,              NORMAL },
+  { lt_number_sign_str, _lt_number_sign,  NORMAL },
+  { eq_str,             _eq,              NORMAL },
+  { gt_str,             _gt,              NORMAL },
+  { to_body_str,        _to_body,         NORMAL },
+  { to_in_str,          _to_in,           NORMAL },
+  { to_number_str,      _to_number,       NORMAL },
+  { to_r_str,           _to_r,            NORMAL },
+  { question_dup_str,   _question_dup,    NORMAL },
+  { fetch_str,          _fetch,           NORMAL },
+  { abort_quote_str,    _abort_quote,     IMMEDIATE + COMP_ONLY },
+  { abs_str,            _abs,             NORMAL },
+  { accept_str,         _accept,          NORMAL },
+  { align_str,          _align,           NORMAL },
+  { aligned_str,        _aligned,         NORMAL },
+  { allot_str,          _allot,           NORMAL },
+  { and_str,            _and,             NORMAL },
+  { base_str,           _base,            NORMAL },
+  { begin_str,          _begin,           IMMEDIATE + COMP_ONLY },
+  { bl_str,             _bl,              NORMAL },
+  { c_store_str,        _c_store,         NORMAL },
+  { c_comma_str,        _c_comma,         NORMAL },
+  { c_fetch_str,        _c_fetch,         NORMAL },
+  { cell_plus_str,      _cell_plus,       NORMAL },
+  { cells_str,          _cells,           NORMAL },
+  { char_str,           _char,            NORMAL },
+  { char_plus_str,      _char_plus,       NORMAL },
+  { chars_str,          _chars,           NORMAL },
+  { constant_str,       _constant,        NORMAL },
+  { count_str,          _count,           NORMAL },
+  { cr_str,             _cr,              NORMAL },
+  { create_str,         _create,          NORMAL },
+  { decimal_str,        _decimal,         NORMAL },
+  { depth_str,          _depth,           NORMAL },
+  { do_str,             _do,              IMMEDIATE + COMP_ONLY },
+  { does_str,           _does,            IMMEDIATE + COMP_ONLY },
+  { drop_str,           _drop,            NORMAL },
+  { dupe_str,           _dupe,            NORMAL },
+  { else_str,           _else,            IMMEDIATE + COMP_ONLY },
+  { emit_str,           _emit,            NORMAL },
+  { environment_str,    _environment,     NORMAL },
+  { execute_str,        _execute,         NORMAL },
+  { fill_str,           _fill,            NORMAL },
+  { find_str,           _find,            NORMAL },
+  { fm_slash_mod_str,   _fm_slash_mod,    NORMAL },
+  { here_str,           _here,            NORMAL },
+  { hold_str,           _hold,            NORMAL },
+  { i_str,              _i,               NORMAL },
+  { if_str,             _if,              IMMEDIATE + COMP_ONLY },
+  { immediate_str,      _immediate,       NORMAL },
+  { invert_str,         _invert,          NORMAL },
+  { j_str,              _j,               NORMAL },
+  { key_str,            _key,             NORMAL },
+  { leave_str,          _leave,           IMMEDIATE + COMP_ONLY },
+  { loop_str,           _loop,            IMMEDIATE + COMP_ONLY },
+  { lshift_str,         _lshift,          NORMAL },
+  { m_star_str,         _m_star,          NORMAL },
+  { max_str,            _max,             NORMAL },
+  { min_str,            _min,             NORMAL },
+  { mod_str,            _mod,             NORMAL },
+  { move_str,           _move,            NORMAL },
+  { negate_str,         _negate,          NORMAL },
+  { or_str,             _or,              NORMAL },
+  { over_str,           _over,            NORMAL },
+  { postpone_str,       _postpone,        IMMEDIATE + COMP_ONLY },
+  { quit_str,           _quit,            NORMAL },
+  { r_from_str,         _r_from,          NORMAL },
+  { r_fetch_str,        _r_fetch,         NORMAL },
+  { recurse_str,        _recurse,         IMMEDIATE + COMP_ONLY },
+  { repeat_str,         _repeat,          IMMEDIATE + COMP_ONLY },
+  { rot_str,            _rot,             NORMAL },
+  { rshift_str,         _rshift,          NORMAL },
+  { s_to_d_str,         _s_to_d,          NORMAL },
+  { sign_str,           _sign,            NORMAL },
+  { sm_slash_rem_str,   _sm_slash_rem,    NORMAL },
+  { source_str,         _source,          NORMAL },
+  { space_str,          _space,           NORMAL },
+  { spaces_str,         _spaces,          NORMAL },
+  { state_str,          _state,           NORMAL },
+  { swap_str,           _swap,            NORMAL },
+  { then_str,           _then,            IMMEDIATE + COMP_ONLY },
+  { u_dot_str,          _u_dot,           NORMAL },
+  { u_lt_str,           _u_lt,            NORMAL },
+  { um_star_str,        _um_star,         NORMAL },
+  { um_slash_mod_str,   _um_slash_mod,    NORMAL },
+  { unloop_str,         _unloop,          NORMAL + COMP_ONLY },
+  { until_str,          _until,           IMMEDIATE + COMP_ONLY },
+  { while_str,          _while,           IMMEDIATE + COMP_ONLY },
+  { word_str,           _word,            NORMAL },
+  { xor_str,            _xor,             NORMAL },
+  { left_bracket_str,   _left_bracket,    IMMEDIATE },
+  { bracket_tick_str,   _bracket_tick,    IMMEDIATE },
+  { bracket_char_str,   _bracket_char,    IMMEDIATE },
+  { right_bracket_str,  _right_bracket,   NORMAL },
 
 #ifdef CORE_EXT_SET
-    { neq_str,            _neq,             NORMAL },
-    { hex_str,            _hex,             NORMAL },
+  { neq_str,            _neq,             NORMAL },
+  { hex_str,            _hex,             NORMAL },
 #endif
 
 #ifdef DOUBLE_SET
@@ -2382,10 +2152,10 @@ const PROGMEM flashEntry_t flashDict[] = {
 #endif
 
 #ifdef TOOLS_SET
-    { dot_s_str,          _dot_s,           NORMAL },
-    { dump_str,           _dump,            NORMAL },
-    { see_str,            _see,             NORMAL },
-    { words_str,          _words,           NORMAL },
+  { dot_s_str,          _dot_s,           NORMAL },
+  { dump_str,           _dump,            NORMAL },
+  { see_str,            _see,             NORMAL },
+  { words_str,          _words,           NORMAL },
 #endif
 
 #ifdef SEARCH_SET
@@ -2393,26 +2163,26 @@ const PROGMEM flashEntry_t flashDict[] = {
 
 #ifdef STRING_SET
 #endif
-    
+
 #ifdef EN_ARDUINO_OPS
 #if defined(ARDUINO_ARCH_AVR)    // 8 bit Processor
-    { freeMem_str,        _freeMem,         NORMAL },
+  { freeMem_str,        _freeMem,         NORMAL },
 #endif
-    { delay_str,          _delay,           NORMAL },
-    { pinWrite_str,       _pinWrite,        NORMAL },
-    { pinMode_str,        _pinMode,         NORMAL },
-    { pinRead_str,        _pinRead,         NORMAL },
-    { analogRead_str,     _analogRead,      NORMAL },
-    { analogWrite_str,    _analogWrite,     NORMAL },
-    { to_name_str,        _toName,          NORMAL },
+  { delay_str,          _delay,           NORMAL },
+  { pinWrite_str,       _pinWrite,        NORMAL },
+  { pinMode_str,        _pinMode,         NORMAL },
+  { pinRead_str,        _pinRead,         NORMAL },
+  { analogRead_str,     _analogRead,      NORMAL },
+  { analogWrite_str,    _analogWrite,     NORMAL },
+  { to_name_str,        _toName,          NORMAL },
 #endif
 
 #ifdef EN_EEPROM_OPS
-    { eeRead_str,     _eeprom_read,    NORMAL },
-    { eeWrite_str,    _eeprom_write,    NORMAL },
+  { eeRead_str,         _eeprom_read,     NORMAL },
+  { eeWrite_str,        _eeprom_write,    NORMAL },
 #endif
 
-    { NULL,           NULL,    NORMAL }
+  { NULL,           NULL,    NORMAL }
 };
 
 

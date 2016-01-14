@@ -36,6 +36,13 @@
 /**                                                                          **/
 /******************************************************************************/
 /**                                                                          **/
+/**  EXTERNAL LIBRARIES                                                      **/
+/**                                                                          **/
+/**    - Arduinal Board Manager                                              **/
+/**      https://github.com/backupbrain/ArduinoBoardManager                  **/
+/**                                                                          **/
+/******************************************************************************/
+/**                                                                          **/
 /**  REVISION HISTORY:                                                       **/
 /**                                                                          **/
 /**    - Removed static from the function headers to avoid compilation       **/
@@ -46,7 +53,7 @@
 /**      files.                                                              **/
 /**    - Fixed comments for pinWrite and pinMode.                            **/
 /**    - YAFFA.h reorganized for different architectures                     **/
-/**    - Replaced Serial.print(PSTR()) with Serial.print(F())
+/**    - Replaced Serial.print(PSTR()) with Serial.print(F())                **/
 /**    0.6.1                                                                 **/
 /**    - Documentation cleanup. thanks to Dr. Hugh Sasse, BSc(Hons), PhD     **/ 
 /**    0.6                                                                   **/
@@ -78,23 +85,10 @@
 /**                                                                          **/
 /******************************************************************************/
 
-/******************************************************************************/
-/**  SRAM Memory Map                                                         **/
-/**  0x08FF   End of SRAM      -  Bottom of C Stack                          **/
-/**  0x0100   Start of SRAM    -                                             **/
-/******************************************************************************/
-#if defined(ARDUINO_ARCH_AVR)    // 8 bit Processor
-  #include <EEPROM.h>
-  #include <avr/pgmspace.h>
-#endif
-#include <stdint.h>
 #include "YAFFA.h"
 #include "Error_Codes.h"
-
-/******************************************************************************/
-/** Uncomment for debug output                                               **/
-/******************************************************************************/
-//#define DEBUG
+#include <EEPROM.h>
+#include <avr/pgmspace.h>
 
 /******************************************************************************/
 /** Major and minor revision numbers                                         **/
@@ -180,20 +174,20 @@ int8_t errorCode = 0;
 /**  Forth Space (Name, Code and Data Space) and Associated Registers        **/
 /******************************************************************************/
 char* pPNO;                  // Pictured Numeric Output Pointer
-uint8_t forthSpace[FORTH_SIZE]; // Reserve a block on RAM for the forth environment
-uint8_t* pHere;              // HERE, points to the next free position in
+cell_t forthSpace[FORTH_SIZE]; // Reserve a block on RAM for the forth environment
+cell_t* pHere;               // HERE, points to the next free position in
                              // Forth Space
-uint8_t* pOldHere;           // Used by "colon-sys"
+cell_t* pOldHere;            // Used by "colon-sys"
 cell_t* pCodeStart;          // used by "colon-sys" and RECURSE
 cell_t* pDoes;               // Used by CREATE and DOES>
 
 /******************************************************************************/
 /** Forth Global Variables                                                   **/
 /******************************************************************************/
-cell_t state; // Holds the text interpreters compile/interpreter state
+uint8_t state; // Holds the text interpreters compile/interpreter state
 cell_t* ip;   // Instruction Pointer
 cell_t w;     // Working Register
-cell_t base;  // stores the number conversion radix
+uint8_t base;  // stores the number conversion radix
 
 /******************************************************************************/
 /** Initialization                                                           **/
@@ -205,6 +199,9 @@ void setup(void) {
   flags = ECHO_ON;
   base = DECIMAL;
   
+  pHere = &forthSpace[0];
+  pOldHere = pHere;
+  
   Serial.print(F("\n YAFFA - Yet Another Forth For Arduino, "));
   Serial.print(F("Version "));
   Serial.print(YAFFA_MAJOR,DEC);
@@ -213,10 +210,10 @@ void setup(void) {
   Serial.print(F(" Copyright (C) 2012 Stuart Wood\r\n"));
   Serial.print(F(" This program comes with ABSOLUTELY NO WARRANTY.\r\n"));
   Serial.print(F(" This is free software, and you are welcome to\r\n"));
-  Serial.print(F(" redistribute it under certain conditions.\r\n"));
-  Serial.print(F("\r\n Terminal Echo is "));
-  if (flags & ECHO_ON) Serial.print(F("On\r\n"));
-  else Serial.print(F("Off\r\n"));
+  Serial.println(F(" redistribute it under certain conditions.\r\n"));
+  
+  Serial.print(F(" Terminal Echo is "));
+  Serial.print(flags & ECHO_ON ? F("On\r\n") : F("Off\r\n"));
   Serial.print(F(" Pre-Defined Words : "));
   pFlashEntry = flashDict;
   w = 0;
@@ -226,34 +223,74 @@ void setup(void) {
   }
   Serial.println(w);
 
-  Serial.print(F(" On "));
-  Serial.print(F(ARCH_STR));
-  Serial.println(F(" Architecture"));
-  Serial.print(F(" Input Buffer: Starts at $"));
+  Serial.println(F("\r\n Environment Parameters: "));
+  Serial.print(F(" Counted String Length: \t"));
+  Serial.print(BUFFER_SIZE);
+  Serial.println(F(" Bytes"));
+  Serial.print(F(" Pict. Num. Output Length: \t"));
+  Serial.print(HOLD_SIZE);
+  Serial.println(F(" Bytes"));
+  Serial.print(F(" Scratch Pad size: \t\t"));
+  Serial.print(PAD_SIZE);
+  Serial.println(F(" Bytes"));
+  Serial.print(F(" Address Size: \t\t\t"));
+  Serial.print(sizeof(addr_t)*8);
+  Serial.println(F(" Bits"));
+  Serial.print(F(" Core Word set: \t\t"));
+  Serial.println(CORE ? F("TRUE") : F("FALSE"));
+  Serial.print(F(" Ext. Core Word set: \t\t"));
+  Serial.println(CORE_EXT ? F("TRUE") : F("FALSE"));
+  Serial.print(F(" Floored Division: \t\t"));
+  Serial.println(FLOORED ? F("TRUE") : F("FALSE"));
+  Serial.print(F(" Max. Char Value: \t\t"));
+  Serial.print(MAX_CHAR);
+  Serial.println(F(" Dec."));
+#ifdef DOUBLE
+  Serial.print(F(" Max. Signed Double: \t\t"));
+  Serial.print(MAX_OF(dcell_t));
+  Serial.println(F(" Dec."));
+#endif
+  Serial.print(F(" Max. Singed Integer: \t\t"));
+  Serial.print(MAX_OF(cell_t));
+  Serial.println(F(" Dec."));
+  Serial.print(F(" Max. unsigned Integer: \t"));
+  Serial.print(MAX_OF(ucell_t));
+  Serial.println(F(" Dec."));
+  Serial.print(F(" Max. Return Stack Size: \t"));
+  Serial.print(RSTACK_SIZE);
+  Serial.println(F(" Cells"));
+  Serial.print(F(" Max. Data Stack Size: \t\t"));
+  Serial.print(STACK_SIZE);
+  Serial.println(F(" Cells"));
+
+  Serial.print(F("\r\n Input Buffer: Size "));
+  Serial.print(BUFFER_SIZE);
+  Serial.print(F(" Bytes, Starts at $"));
   Serial.print((int)&cInputBuffer[0], HEX);
   Serial.print(F(", Ends at $"));
   Serial.println((int)&cInputBuffer[BUFFER_SIZE] - 1, HEX);
 
-  Serial.print(F(" Token Buffer: Starts at $"));
+  Serial.print(F(" Token Buffer: Size "));
+  Serial.print(WORD_SIZE);
+  Serial.print(F(" Bytes, Starts at $"));
   Serial.print((int)&cTokenBuffer[0], HEX);
   Serial.print(F(", Ends at $"));
   Serial.println((int)&cTokenBuffer[WORD_SIZE] - 1, HEX);
 
-  pHere = &forthSpace[0];
-  pOldHere = pHere;
-  Serial.print(F(" Forth Space: Starts at $"));
+  Serial.print(F(" Forth Space: Size "));
+  Serial.print(FORTH_SIZE);
+  Serial.print(F(" Cells, Starts at $"));
   Serial.print((int)&forthSpace[0], HEX);
   Serial.print(F(", Ends at $"));
   Serial.println((int)&forthSpace[FORTH_SIZE] - 1, HEX);
 
-#if defined(ARDUINO_ARCH_AVR)    // 8 bit Processor
   mem = freeMem();
   serial_print_P(sp_str);
   Serial.print(mem);
   Serial.print(F(" ($"));
   Serial.print(mem, HEX);  
   Serial.print(F(") bytes free\r\n"));
-#endif
+
   serial_print_P(prompt_str);
 }
 
@@ -261,8 +298,7 @@ void setup(void) {
 /** Outer interpreter                                                        **/
 /******************************************************************************/
 void loop(void) {
-  cpSource = &cInputBuffer[0];
-  cpToIn = cpSource;
+  cpSource = cpToIn = cInputBuffer;
   cpSourceEnd = cpSource + getLine(cpSource, BUFFER_SIZE);
   if (cpSourceEnd > cpSource) {
     interpreter();
@@ -270,8 +306,9 @@ void loop(void) {
     else {
       if (!state) {
         serial_print_P(ok_str);
+        // This shows a DOT for each item on the data stack
         char i = tos + 1;
-        while(i--) Serial.print(".");
+        while(i--) Serial.print(F("."));
         Serial.println();
       }
     }
@@ -327,34 +364,48 @@ uint8_t getLine(char* addr, uint8_t length) {
       *addr++ = inChar;
       *addr = 0;
     }
-  } while(addr < start + length);
-  return((uint8_t)(addr - start));
+  } while (addr < start + length);
+  return ((uint8_t)(addr - start));
 }
-  
+
 /******************************************************************************/
 /** GetToken                                                                 **/
 /**   Find the next token in the buffer and stores it into the token buffer  **/
 /**   with a NULL terminator. Returns length of the token or 0 if at end off **/
 /**   the buffer.                                                            **/
 /**   Could this become the word WORD?                                           **/
+// ( char "<chars>ccc<chars>" -- c-addr )
+// Skip leading delimiters. Parse characters ccc delimited by char. An ambiguous
+// condition exists if the length of the parsed string is greater than the 
+// implementation-defined length of a counted string.
+//
+// c-addr is the address of a transient region containing the parsed word as a
+// counted string. If the parse area was empty or contained no characters other than
+// the delimiter, the resulting string has a zero length. A space, not included in 
+// the length, follows the string. A program may replace characters within the 
+// string.
+//
+// NOTE: The requirement to follow the string with a space is obsolescent and is
+// included as a concession to existing programs that use CONVERT. A program shall 
+// not depend on the existence of the space.
 /******************************************************************************/
 uint8_t getToken(void) {
   uint8_t tokenIdx = 0;
-  while(cpToIn <= cpSourceEnd) {
+  while (cpToIn <= cpSourceEnd) {
     if ((*cpToIn == cDelimiter) || (*cpToIn == 0)) {
-      cTokenBuffer[tokenIdx] = NULL;       // Terminate SubString
+      cTokenBuffer[tokenIdx] = '\0';       // Terminate SubString
       cpToIn++;
       if (tokenIdx) return tokenIdx;
     } else {
-      if (tokenIdx < WORD_SIZE - 1) {
+      if (tokenIdx < (WORD_SIZE - 1)) {
         cTokenBuffer[tokenIdx++] = *cpToIn++;
       }
     }
   }
   // If we get to SourceEnd without a delimiter and the token buffer has
   // something in it return that. Else return 0 to show we found nothing
-  if (tokenIdx) return tokenIdx;    
-  else return 0;  
+  if (tokenIdx) return tokenIdx;
+  else return 0;
 }
 
 /******************************************************************************/
@@ -374,31 +425,18 @@ void interpreter(void) {
       /*************************/
       if (isWord(cTokenBuffer)) {
         if (wordFlags & IMMEDIATE) {
-#ifdef DEBUG
-          Serial.print(F("\r\n  IMMEDIATE WORD: "));
-#endif
           if (w > 255) {
             rPush(0);            // Push 0 as our return address
             ip = (cell_t *)w;          // set the ip to the XT (memory location)
-#ifdef DEBUG
-            debugNewIP();
-#endif
             executeWord();
           } else {
-            function = (func)pgm_read_word(&(flashDict[w - 1].function));
-#ifdef DEBUG
-            serial_print_P((char*) pgm_read_word(&(flashDict[w - 1].name)));
-#endif
+            function = (func)pgm_read_word(&flashDict[w - 1].function);
             function();
             if (errorCode) return;
           }
           executeWord();
         } else {
-          *(cell_t*)pHere = w;
-          pHere += sizeof(cell_t);
-#ifdef DEBUG
-          debugXT((cell_t*)(pHere - sizeof(cell_t)));
-#endif
+          *pHere++ = w;
         }
       } else if (isNumber(cTokenBuffer)) {
         _literal();
@@ -407,6 +445,7 @@ void interpreter(void) {
         _throw();
       }
     } else {
+
       /************************/
       /* Interpret Mode       */
       /************************/
@@ -416,27 +455,18 @@ void interpreter(void) {
           _throw();
           return;
         }
+
         if (w > 255) {
-#ifdef DEBUG
-          Serial.print(F("Interpreting: "));
-          Serial.println(cTokenBuffer);
-#endif
           rPush(0);                  // Push 0 as our return address
           ip = (cell_t *)w;          // set the ip to the XT (memory location)
-#ifdef DEBUG
-          debugNewIP();
-#endif
           executeWord();
           if (errorCode) return;
-#ifdef DEBUG
-          Serial.print(F("Finished\n\r"));
-#endif
         } else {
-          function = (func) pgm_read_word(&(flashDict[w - 1].function));
+          function = (func) pgm_read_word(&flashDict[w - 1].function);
           function();
           if (errorCode) return;
         }
-        executeWord();
+//        executeWord(); // CAL why is this here ????
       } else if (isNumber(cTokenBuffer)) {
       } else {
         push(-13);
@@ -445,8 +475,8 @@ void interpreter(void) {
       }
     }
   }
-  cpToIn = cpSource;  
-} 
+  cpToIn = cpSource;
+}
 
 /******************************************************************************/
 /** Virtual Machine that executes Code Space                                 **/
@@ -456,20 +486,13 @@ void executeWord(void) {
   flags |= EXECUTE;
   while(ip != NULL) {
     w = *ip++; 
-#ifdef DEBUG
-    debugXT(ip-1);
-#endif
     if (w > 255) {
       // ip is an address in code space
-      rPush((cell_t)ip);        // push the address to return to
+      rPush((size_t)ip);        // push the address to return to
       ip = (cell_t*)w;          // set the ip to the new address
-    } 
+    }
     else {
-      function = (func) pgm_read_word(&(flashDict[w - 1].function));
-#ifdef DEBUG
-      Serial.print(F("  Calling: "));
-      serial_print_P((char*) pgm_read_word(&(flashDict[w - 1].name)));
-#endif
+      function = (func) pgm_read_word(&flashDict[w - 1].function);
       function();
       if (errorCode) return;
     }
@@ -489,7 +512,7 @@ void executeWord(void) {
 uint8_t isWord(char* addr) {
   uint8_t index = 0;
   uint8_t length = 0;
-  
+
   pUserEntry = pLastUserEntry;
   // First search through the user dictionary
   while(pUserEntry) {
@@ -502,8 +525,8 @@ uint8_t isWord(char* addr) {
     pUserEntry = (userEntry_t*)pUserEntry->prevEntry;
   }
   // Second Search through the flash Dictionary
-  while(pgm_read_word(&(flashDict[index].name))) {
-    if (!strcasecmp_P(addr, (char*) pgm_read_word(&(flashDict[index].name)))) {
+  while(pgm_read_word(&flashDict[index].name)) {
+    if (!strcasecmp_P(addr, (char*) pgm_read_word(&flashDict[index].name))) {
       w = index + 1; 
       wordFlags = pgm_read_byte(&(flashDict[index].flags));
       if (wordFlags & SMUDGE) return 0;
@@ -528,9 +551,9 @@ uint8_t isNumber(char* subString) {
   unsigned char negate = 0;                  // flag if number is negative
   cell_t tempBase = base;
   cell_t number = 0;
-  
+
   wordFlags = 0;
-  
+
   // Look at the initial character, handling either '-', '$', or '%'
   switch (*subString) {
     case '$':  base = HEXIDECIMAL;  goto SKIP;
@@ -550,8 +573,8 @@ SKIP:                // common code to skip initial character
     if ((offset < base) && (offset > -1))  
       number = (number * base) + (pos - charset);
     else {
-        base = tempBase;
-        return 0;           // exit, signalling subString isn't a number
+      base = tempBase;
+      return 0;           // exit, signalling subString isn't a number
     }
     subString++;
   }
@@ -562,11 +585,9 @@ SKIP:                // common code to skip initial character
 }
 
 /******************************************************************************/
-/** freeMem returns the amount of free RAM that is left.                     **/
-/** This is a simplistic implementation.                                     **/
+/** freeHeap returns the amount of free heap remaining.                      **/
 /******************************************************************************/
-#if defined(ARDUINO_ARCH_AVR)    // 8 bit Processor
-unsigned int freeMem(void) { 
+unsigned int freeHeap(void) { 
 //  extern void *__bss_end;
 //  extern void *__brkval;
 //  int16_t dummy;
@@ -578,7 +599,12 @@ unsigned int freeMem(void) {
   int v; 
   return (int) &v - (__brkval == 0 ? (int) &__heap_start : (int) __brkval); 
 }
-#endif
+/******************************************************************************/
+/** freeMem returns the amount of free forth space left.                     **/
+/******************************************************************************/
+static unsigned int freeMem(void) {
+  return (pHere - forthSpace);
+}
 
 /******************************************************************************/
 /** Start a New Entry in the Dictionary                                      **/
@@ -595,27 +621,15 @@ void openEntry(void) {
     push(-16);
     _throw();
   }
-  pHere = (uint8_t*)pNewUserEntry->name;
+  uint8_t *ptr = (uint8_t*)pNewUserEntry->name;
   do {
-    *pHere++ = cTokenBuffer[index++];
-  } while (cTokenBuffer[index] != NULL);
-  *pHere++ = NULL;
+    *ptr++ = cTokenBuffer[index++];
+  } while (cTokenBuffer[index] != '\0');
+  *ptr++ = '\0';
+  pHere = (cell_t *)ptr;
   ALIGN_P(pHere);
   pNewUserEntry->cfa = (addr_t)pHere;
   pCodeStart = (cell_t*)pHere;
-
-#ifdef DEBUG
-  Serial.print(F("\r\nNEW ENTRY @ $"));
-  Serial.print((uint16_t)pNewUserEntry, HEX);
-  Serial.print(F("\r\n  NAME Starts @ $"));
-  Serial.print((uint16_t)pNewUserEntry->name, HEX);
-  Serial.print(F(" = "));
-  Serial.print(pNewUserEntry->name);
-  Serial.print(F("\r\n  Previous Entry @ $"));
-  Serial.print((uint16_t)pNewUserEntry->prevEntry, HEX);
-  Serial.print(F("\r\n  Code Starts @ $"));
-  Serial.print((uint16_t)pHere, HEX);
-#endif
 }
 
 /******************************************************************************/
@@ -623,14 +637,9 @@ void openEntry(void) {
 /******************************************************************************/
 void closeEntry(void) {
   if (errorCode == 0) {
-    *(cell_t*)pHere = EXIT_IDX;
-    pHere += sizeof(cell_t);
+    *pHere++ = EXIT_IDX;
     pNewUserEntry->flags = 0; // clear the word's flags
     pLastUserEntry = pNewUserEntry;
-#ifdef DEBUG
-    debugXT((cell_t*)(pHere - sizeof(cell_t)));
-    Serial.print(F("\r\nEntry Closed"));
-#endif
   } else pHere = pOldHere;   // Revert pHere to what it was before the start
                              // of the new word definition
 }
@@ -650,18 +659,6 @@ void closeEntry(void) {
 void push(cell_t value) {
   if (tos < STACK_SIZE - 1) {
     stack[++tos] = value;
-#ifdef DEBUG
-    Serial.print(F("\r\n  Push("));
-    Serial.print(value);
-    Serial.print(F("): "));
-    char depth = tos + 1;
-    if (tos >= 0) {
-      for (char i = 0; i < depth ; i++) {
-        Serial.print(stack[i]);
-        serial_print_P(sp_str);
-      }
-    }
-#endif
   } else {
     stack[tos] = -3;
     _throw();
@@ -674,17 +671,6 @@ void push(cell_t value) {
 void rPush(cell_t value) {
   if (rtos < RSTACK_SIZE - 1) {
     rStack[++rtos] = value;
-#ifdef DEBUG
-    Serial.print(F("\r\n  rPush("));
-    Serial.print(value);
-    Serial.print(F("): "));
-    if (rtos >= 0) {
-      for (char i = 0; i < (rtos + 1) ; i++) {
-        Serial.print(rStack[i]);
-        serial_print_P(sp_str);
-      }
-    }
-#endif
   } else {
     push(-5);
     _throw();
@@ -696,23 +682,10 @@ void rPush(cell_t value) {
 /*********************************************/
 cell_t pop(void) {
   if (tos > -1) {
-#ifdef DEBUG
-    Serial.print(F("\r\n  Pop("));
-    Serial.print(stack[tos--]);
-    Serial.print(F("): "));
-    if (tos >= 0) {
-      for (char i = 0; i < (tos + 1) ; i++) {
-        Serial.print(stack[i]);
-        serial_print_P(sp_str);
-      }
-    }
-    return(stack[tos+1]);
-#else
     return (stack[tos--]);
-#endif
   } else {
-   push(-4);
-   _throw();
+    push(-4);
+    _throw();
   }
   return 0;
 }
@@ -722,20 +695,7 @@ cell_t pop(void) {
 /***********************************************/
 cell_t rPop(void) {
   if (rtos > -1) {
-#ifdef DEBUG
-    Serial.print(F("\r\n  rPop("));
-    Serial.print(rStack[rtos--]);
-    Serial.print(F("): "));
-    if (rtos >= 0) {
-      for (char i = 0; i < (rtos + 1) ; i++) {
-        Serial.print(rStack[i]);
-        serial_print_P(sp_str);
-      }
-    }
-    return(rStack[rtos+1]);
-#else
     return (rStack[rtos--]);
-#endif
   } else {
     push(-6);
     _throw();
@@ -766,15 +726,12 @@ void displayValue(void) {
 
 uint8_t serial_print_P(PGM_P ptr) {
   char ch;
-//  uint8_t i = 79;
   uint8_t i;
-//  for (; i > 0; i--) {
-  for (i = 0; i > BUFFER_SIZE; i++) {
+  for (i = 0; i < BUFFER_SIZE - 1; i++) {
     ch = pgm_read_byte(ptr++);
     if (ch == 0) break;
     Serial.write(ch);
   }
-//  return (79 - i);
   return (i);
 }
 
@@ -785,12 +742,12 @@ uint8_t serial_print_P(PGM_P ptr) {
 char* xtToName(cell_t xt) {
   uint8_t index = 0;
   uint8_t length = 0;
-  
+
   pUserEntry = pLastUserEntry;
 
   // Second Search through the flash Dictionary
   if (xt < 256) {
-    serial_print_P((char*) pgm_read_word(&(flashDict[xt-1].name)));
+    serial_print_P((char*)pgm_read_word(&flashDict[xt-1].name));
   } else {
     while(pUserEntry) {
       if (pUserEntry->cfa == xt) {
@@ -803,27 +760,4 @@ char* xtToName(cell_t xt) {
   return 0;
 }
 
-/******************************************************************************/
-/** Debug Output Functions                                                   **/
-/******************************************************************************/
-#ifdef DEBUG
-void debugXT(void* ptr) {
-  Serial.print(F("\r\n  Addr: $"));
-  Serial.print((uint16_t)ptr, HEX);
-  Serial.print(F(" => XT: "));
-  Serial.print(*(ucell_t*)ptr);
-}
 
-void debugValue(void* ptr) {
-  Serial.print(F("\r\n  Addr: $"));
-  Serial.print((uint16_t)ptr, HEX);
-  Serial.print(F(" => VALUE: "));
-  Serial.print(*(int16_t*)ptr);
-}
-
-void debugNewIP(void) {
-  Serial.print(F("\r\n  New IP: $"));
-  Serial.print((ucell_t)ip, HEX);
-}
-
-#endif

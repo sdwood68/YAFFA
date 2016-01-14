@@ -84,7 +84,7 @@
 /**  -58 [IF], [ELSE], or [THEN] exception                                   **/
 
 typedef struct {
-  const uint8_t code;
+  const int code;
   const char* name;
 } exception_t;
 
