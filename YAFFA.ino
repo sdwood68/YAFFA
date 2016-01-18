@@ -36,15 +36,9 @@
 /**                                                                          **/
 /******************************************************************************/
 /**                                                                          **/
-/**  EXTERNAL LIBRARIES                                                      **/
-/**                                                                          **/
-/**    - Arduinal Board Manager                                              **/
-/**      https://github.com/backupbrain/ArduinoBoardManager                  **/
-/**                                                                          **/
-/******************************************************************************/
-/**                                                                          **/
 /**  REVISION HISTORY:                                                       **/
 /**                                                                          **/
+/**    - Added words ">NUMBER", "KEY?", ".(" 
 /**    - Removed static from the function headers to avoid compilation       **/
 /**      errors with the new 1.6.6 Arduino IDE.                              **/
 /**    - changed file names from yaffa.h to YAFFA.h and Yaffa.ino to         **/
@@ -194,6 +188,7 @@ uint8_t base;  // stores the number conversion radix
 /******************************************************************************/
 void setup(void) {                
   uint16_t mem;
+  uint8_t e1,e2;
   Serial.begin(19200);     // Open serial communications:
 
   flags = ECHO_ON;
@@ -291,6 +286,28 @@ void setup(void) {
   Serial.print(mem, HEX);  
   Serial.print(F(") bytes free\r\n"));
 
+  // >>> Contributed by Andrew Holt
+  serial_print_P(PSTR(" EEPROM Size:"));
+  Serial.println( EEPROM.length());
+
+  e1=EEPROM.read(0);
+  e2=EEPROM.read(1);
+
+  Serial.println();
+  pinMode(14,0);
+
+  if( (e1 == 0xff) && (e2 == 0xff )) {
+    serial_print_P(PSTR(" EEPROM Empty\r\n"));
+  } else {
+    serial_print_P(PSTR(" Load from EEPROM.\r\n"));
+    if( digitalRead(14) == 0) {
+        serial_print_P(PSTR(" Inhibited by in 14.\r\n"));
+    } else {
+        _eeInterpret();
+    }
+  }
+  // <<< Contributed by Andrew Holt
+
   serial_print_P(prompt_str);
 }
 
@@ -302,19 +319,24 @@ void loop(void) {
   cpSourceEnd = cpSource + getLine(cpSource, BUFFER_SIZE);
   if (cpSourceEnd > cpSource) {
     interpreter();
-    if (errorCode) errorCode = 0;
-    else {
+    if (errorCode) {
+        errorCode = 0;
+    } else {
       if (!state) {
         serial_print_P(ok_str);
         // This shows a DOT for each item on the data stack
         char i = tos + 1;
-        while(i--) Serial.print(F("."));
+        while(i--) {
+            Serial.print(".");
+        }
         Serial.println();
       }
     }
   }
-  if (state) serial_print_P(compile_prompt_str);
-  else serial_print_P(prompt_str);
+  if (state) 
+      serial_print_P(compile_prompt_str);
+  else 
+      serial_print_P(prompt_str);
 }
 
 /******************************************************************************/
@@ -511,21 +533,19 @@ void executeWord(void) {
 /******************************************************************************/
 uint8_t isWord(char* addr) {
   uint8_t index = 0;
-  uint8_t length = 0;
 
   pUserEntry = pLastUserEntry;
   // First search through the user dictionary
   while(pUserEntry) {
     if (strcmp(pUserEntry->name, addr) == 0) {
       wordFlags = pUserEntry->flags;
-      length = strlen(pUserEntry->name);
       w = (cell_t)pUserEntry->cfa;
       return(1);
     }
     pUserEntry = (userEntry_t*)pUserEntry->prevEntry;
   }
   // Second Search through the flash Dictionary
-  while(pgm_read_word(&flashDict[index].name)) {
+  while(pgm_read_word(&flashDict[index])) {
     if (!strcasecmp_P(addr, (char*) pgm_read_word(&flashDict[index].name))) {
       w = index + 1; 
       wordFlags = pgm_read_byte(&(flashDict[index].flags));
@@ -617,6 +637,7 @@ void openEntry(void) {
   if (pLastUserEntry == NULL)                  
     pNewUserEntry->prevEntry = 0;              // Initialize User Dictionary
   else pNewUserEntry->prevEntry = (addr_t)pLastUserEntry;
+
   if(!getToken()) {
     push(-16);
     _throw();

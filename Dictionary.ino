@@ -137,12 +137,12 @@ const PROGMEM char number_sign_str[] = "#";
 // pictured numeric output string.
 void _number_sign(void) { 
   udcell_t ud;
-  ud = (udcell_t)pop()<<sizeof(ucell_t)*8;
+  ud = (udcell_t)pop() << sizeof(ucell_t) * 8;
   ud += (udcell_t)pop();
   *--pPNO = pgm_read_byte(&charset[ud % base]);
   ud /= base;
   push((ucell_t)ud);
-  push((ucell_t)(ud >> sizeof(ucell_t)*8));
+  push((ucell_t)(ud >> sizeof(ucell_t) * 8));
 }
 
 const PROGMEM char number_sign_gt_str[] = "#>";
@@ -168,7 +168,7 @@ void _number_sign_s(void) {
     ud /= base;
   }
   push((ucell_t)ud);
-  push((ucell_t)(ud >> sizeof(ucell_t)*8));
+  push((ucell_t)(ud >> sizeof(ucell_t) * 8));
 }
 
 const PROGMEM char tick_str[] = "'";
@@ -559,8 +559,54 @@ void _to_in(void) {
 
 const PROGMEM char to_number_str[] = ">number";
 // ( ud1 c-addr1 u1 -- ud2 c-addr u2 )
+// ud2 is the unsigned result of converting the characters within the string
+// specified by c-addr1 u1 into digits, using the number in BASE, and adding
+// each into ud1 after multiplying ud1 by the number in BASE.  Conversion
+// continues left-to-right until a character that is not convertible,
+// including any “+” or “-”, is encountered or the string is entirely
+// converted.  c-addr2 is the location of the first unconverted character or
+// the first character past the end of the string if the string was entirely
+// converted.  u2 is the number of unconverted characters in the string.  An
+// ambiguous condition exists if ud2 overflows during the conversion.
 void _to_number(void) {
-  serial_print_P(not_done_str); 
+  uint8_t len;
+  char* ptr;
+  cell_t accum;
+
+  unsigned char negate = 0;                  // flag if number is negative
+  len = (uint8_t)pop();
+  ptr = (char*)pop();
+  accum = pop();
+  
+  // Look at the initial character, handling either '-', '$', or '%'
+  switch (*ptr) {
+    case '$':  base = HEXIDECIMAL; goto SKIP;
+    case '%':  base = BINARY; goto SKIP;
+    case '#':  base = DECIMAL; goto SKIP;
+    case '+':  negate = 0; goto SKIP;
+    case '-':  negate = 1;
+SKIP:                // common code to skip initial character
+    ptr++;
+    break;
+  }
+  // Iterate over rest of string, and if rest of digits are in
+  // the valid set of characters, accumulate them.  If any
+  // invalid characters found, abort and return 0.
+  while (len < 0) {
+    PGM_P pos = strchr_P(charset, (int)tolower(*ptr));
+    cell_t offset = pos - charset;
+    if ((offset < base) && (offset > -1))  
+      accum = (accum * base) + (pos - charset);
+    else {
+      break;           // exit, We hit a non number
+    }
+    ptr++;
+    len--;
+  }
+  if (negate) accum = ~accum + 1;     // apply sign, if necessary
+  push(accum); // Push the resultant number
+  push((size_t)ptr); // Push the last convertered caharacter
+  push(len); // push the remading length of unresolved charaters
 }
 
 const PROGMEM char to_r_str[] = ">r";
@@ -704,8 +750,8 @@ void _bl(void) {
 const PROGMEM char c_store_str[] = "c!";
 // ( char c-addr -- )
 void _c_store(void) {
-  uint8_t *addr = (uint8_t*) pop();
-  *addr = (uint8_t)pop();
+  char* addr = (char*) pop();
+  *addr = (char)pop();
 }
 
 const PROGMEM char c_comma_str[] = "c,";
@@ -717,7 +763,7 @@ void _c_comma(void) {
 const PROGMEM char c_fetch_str[] = "c@";
 // ( c-addr -- char )
 void _c_fetch(void) {
-  uint8_t *addr = (uint8_t *) pop();
+  char* addr = (char*) pop();
   push(*addr);
 }
 
@@ -1683,9 +1729,103 @@ void _right_bracket(void) {
 /**                          Core Extension Set                               **/
 /*******************************************************************************/
 #ifdef CORE_EXT_SET
+const PROGMEM char dot_paren_str[] = ".(";
+// ( "ccc<paren>" -- )
+// Parse and display ccc delimitied by ) (right parenthesis). ,( is an imedeate
+// word
+void _dot_paren(void) { 
+  push(')');
+  _word();
+  _count();
+  _type();
+}
+
+const PROGMEM char zero_not_equal_str[] = "0<>";
+// ( x -- flag)
+// flag is true if and only if x is not equal to zero. 
+void _zero_not_equal(void) { 
+  w = pop();
+  if (w == 0) push(FALSE);
+  else push(TRUE);
+}
+
+const PROGMEM char zero_greater_str[] = "0>";
+// (n -- flag)
+// flag is true if and only if n is greater than zero.
+void _zero_greater(void) {
+  w = pop();
+  if (w > 0) push(TRUE);
+  else push(FALSE);
+}
+
+const PROGMEM char two_to_r_str[] = "2>r";
+// Interpretation: Interpretation semantics for this word are undefined. 
+// Execution: ( x1 x2 -- ) ( R:  -- x1 x2 )
+// Transfer cell pair x1 x2 to the return stack.  Semantically equivalent
+// to SWAP >R >R.
+void _two_to_r(void) {
+  _swap();
+  _to_r();
+  _to_r();
+}
+
+const PROGMEM char two_r_from_str[] = "2r>";
+// Interpretation: Interpretation semantics for this word are undefined. 
+// Execution: ( -- x1 x2 )  ( R:  x1 x2 -- ) 
+// Transfer cell pair x1 x2 from the return stack.  Semantically equivalent to
+// R> R> SWAP. 
+void _two_r_from(void) {
+  _r_from();
+  _r_from();
+  _swap();
+}
+
+const PROGMEM char two_r_fetch_str[] = "2r@";
+// Interpretation: Interpretation semantics for this word are undefined. 
+// Execution: ( -- x1 x2 )  ( R:  x1 x2 -- x1 x2 ) 
+// Copy cell pair x1 x2 from the return stack.  Semantically equivalent to
+// R> R> 2DUP >R >R SWAP. 
+void _two_r_fetch(void) {
+  _r_from();
+  _r_from();
+  _two_dup();
+  _to_r();
+  _to_r();
+  _swap();
+}
+
+const PROGMEM char colon_noname_str[] = ":noname";
+// ( C:  -- colon-sys )  ( S:  -- xt )
+// Create an execution token xt, enter compilation state and start the current
+// definition, producing colon-sys.  Append the initiation semantics given 
+// below to the current definition. 
+// The execution semantics of xt will be determined by the words compiled into
+// the body of the definition.  This definition can be executed later by using
+// xt EXECUTE.
+// If the control-flow stack is implemented using the data stack, colon-sys 
+// shall be the topmost item on the data stack.  See 3.2.3.2 Control-flow stack.
+//
+// Initiation: ( i*x -- i*x )  ( R:  -- nest-sys )
+// Save implementation-dependent information nest-sys about the calling 
+// definition.  The stack effects i*x represent arguments to xt. 
+//
+// xt Execution: ( i*x -- j*x )
+// Execute the definition specified by xt.  The stack effects i*x and j*x 
+// represent arguments to and results from xt, respectively.  
+//void _colon_noname(void) {
+//  state = TRUE;
+//  push(COLON_SYS);
+//  openEntry();
+//}
+
 const PROGMEM char neq_str[] = "<>";
-void _neq(void) { 
-  push(pop() != pop()); 
+// (x1 x2 -- flag)
+// flag is true if and only if x1 is not bit-for-bit the same as x2.
+void _neq(void) {
+  cell_t x2 = pop();
+  cell_t x1 = pop();
+  if (x1 != x2) push(TRUE);
+  else push(FALSE); 
 }
 
 const PROGMEM char hex_str[] = "hex";
@@ -1735,6 +1875,24 @@ void _throw(void) {
 #endif
 
 /*******************************************************************************/
+/**                             Facility Set                                  **/
+/*******************************************************************************/
+#ifdef FACILITY_SET
+/*
+ * Contributed by Andrew Holt
+ */
+const PROGMEM char key_question_str[] = "key?";
+void _key_question(void) {
+    
+    if( Serial.available() > 0) {
+        push(TRUE);
+    } else {
+        push(FALSE);
+    }
+}
+#endif
+
+/*******************************************************************************/
 /**                              Local Set                                    **/
 /*******************************************************************************/
 #ifdef LOCAL_SET
@@ -1750,6 +1908,7 @@ void _throw(void) {
 /**                          Programming Tools Set                            **/
 /*******************************************************************************/
 #ifdef TOOLS_SET
+
 const PROGMEM char dot_s_str[] = ".s";
 void _dot_s(void) {
   char i;
@@ -1921,18 +2080,342 @@ void _eeprom_write(void) {             // value address --
   value = (char) pop();
   EEPROM.write(address, value);
 }
+
+// >>> Contributed by Andrew Holt
+#define SOH 0x01
+#define EOT 0x04
+#define ACK 0x06
+#define NAK 0x15
+#define CAN 0x18
+#define LF 0x0a
+#define CR 0x0d
+
+/*
+ * Contributed by Andrew Holt
+ * Reads a line of text ended by a CR (ASCII 0x0d) from EEPROM,
+ *
+ * Returns the length of the line.
+ * Writes the charcters to the buffer pointed to by addr
+ * And updates eeAddr (he EEPROM Address) up to the maximim length.
+ */
+uint8_t eeGetLine(char *addr, int16_t *eeAddr) {
+
+    uint8_t len=0;
+    uint8_t inChar;
+    char *start = addr;
+    bool exitFlag = false;
+    uint16_t length = BUFFER_SIZE;
+
+    do {
+        inChar = EEPROM.read((*eeAddr)++);
+        switch( inChar ) {
+            case CR:
+                exitFlag = true;
+                *addr = 0;
+                break;
+            case LF:
+                break;
+            case 0xff: // hit end of data.
+                exitFlag = true;
+                len=-1;
+                break;
+            default:
+                *addr++ = inChar;
+                *addr = 0;
+                len++;
+                break;
+        }
+
+        if( len > length ) {
+            exitFlag = true;
+        }
+    } while (exitFlag == false) ;
+    return( len );
+}
+
+/*
+ * Contributed by Andrew Holt
+ */
+const PROGMEM char eeInterpret_str[] = "eeInterpret";
+void _eeInterpret(void) {
+    uint8_t dataByte;
+    int16_t eeIdx=0;
+    uint8_t buffIdx = 0;
+    bool exitFlag=false;
+    uint8_t len=0;
+
+    cpSource = &cInputBuffer[0];
+    cpToIn = cpSource;
+
+    memset( cpSource,' ', BUFFER_SIZE );
+
+    while( exitFlag == false) {
+        Serial.print("eeIdx : ");
+        Serial.println( eeIdx );
+
+        len = eeGetLine(cpSource, &eeIdx);
+
+        if( len < 255) {
+
+            Serial.print("Len   : ");
+            Serial.println( len );
+
+            cpSourceEnd = cpSource + len;
+
+            Serial.println( cpSource );
+
+            if (cpSourceEnd > cpSource) {
+
+                Serial.print("State(before):");
+                Serial.println( state );
+
+                interpreter();
+
+                Serial.print("State(before):");
+                Serial.println( state );
+
+                Serial.print("errorCode:");
+                Serial.println(errorCode);
+
+                if( errorCode) {
+                    errorCode = 0;
+                    exitFlag = true;
+                } else {
+                    if(!state) {
+                        char i = tos + 1;
+                    }
+                }
+            }
+        } else {
+            exitFlag=true;
+        }
+    }
+
+    /*
+       dataByte = EEPROM.read(0);
+
+       if( dataByte == 0xff ) {
+       dataByte = EEPROM.read(1);
+       if (dataByte == 0xff ) {
+       push(-1);
+       return;
+       }
+       }
+       memset( cpSource,' ', BUFFER_SIZE );
+
+       for(eeIdx=0; ((eeIdx < EEPROM.length()) && (exitFlag == false)) ; eeIdx++) {
+       dataByte = EEPROM.read( eeIdx );
+       cpSource[buffIdx++] = dataByte;
+
+       if(dataByte == 0x0d) {
+       cpSource[buffIdx] = 0;
+       mySerial.println(cpSource);
+       interpreter();
+       if (errorCode) {
+       errorCode = 0;
+       exitFlag = true;
+       push(-1);
+       }
+
+       buffIdx = 0;
+       memset( cpSource,' ', BUFFER_SIZE );
+       }
+
+       if(dataByte == 0xff) {
+       mySerial.println("Hit end");
+       exitFlag = true;
+       memset( cpSource,' ', BUFFER_SIZE );
+       push(0);
+       }
+
+       }
+       */
+}
+
+/*
+ * Contributed by Andrew Holt
+ */
+const PROGMEM char eeload_str[] = "eeLoad";
+void _eeLoad(void) {
+    uint8_t incoming[132];
+    uint8_t exitFlag=0;
+    uint8_t inByte;
+    uint8_t data;
+    uint8_t lastByte=0;
+
+    uint16_t eepromIdx=0;
+
+    uint8_t seq;
+    uint8_t iseq;
+
+    uint8_t cksum;
+    long now;
+
+    Serial.setTimeout(10000);
+
+    Serial.print(">> ");
+    while (exitFlag == 0) {
+        while(!Serial.available()) {
+        }
+        inByte = Serial.read();
+
+        if( lastByte == '\r' && inByte == '\n' ) { // Empty line.
+            Serial.write('\r');
+            Serial.print(">> ");
+        }
+        if( inByte == 0x1a) {
+            Serial.println("0x1a EOF Received");
+            exitFlag = 1;
+        } else {
+            lastByte = inByte;
+            Serial.write(inByte);
+            EEPROM.write( eepromIdx, inByte);
+
+            data = EEPROM.read( eepromIdx );
+            if ( data != inByte ) {
+                EEPROM.write( eepromIdx, inByte);
+                delay(10);
+            }
+
+            eepromIdx++;
+
+            if( inByte == 0x0a ) {
+                Serial.print(">> ");
+            }
+        }
+    }
+
+}
+
+/*
+ * Contributed by Andrew Holt
+ * Set EEPROM contents to default, i.e. 0xff
+ *
+ * @param start - Start address
+ * @param len - Number of bytes to erase
+ *
+ * The caller passes the address and length on the stack, and then
+ * writes 0xff to each location.  To reduce 'wear' the byte is read first 
+ * and compared with 0xff, if it already is 0xff no write operation is performed.
+ */
+const PROGMEM char eeClear_str[] = "eeClear";
+void _eeprom_clear(void) {             // value address -- 
+    uint16_t start;
+    uint16_t len;
+    uint16_t end;
+    uint16_t idx;
+    uint8_t data;
+
+    len=pop();
+    start = pop();
+
+    end = start + len;
+
+    if( len > EEPROM.length() ) {
+        end = EEPROM.length() ;
+    }
+
+    for( idx = start; idx < end; idx++) {
+        data = EEPROM.read( idx );
+        if( data != 0xff ) {
+            EEPROM.write(idx,0xff);
+            delay(10);
+        }
+    }
+}
+
+/*
+ * Contributed by Andrew Holt
+ */
+void print2Hex(uint8_t n) {
+    if( n < 0x10 ) {
+        Serial.print("0");
+    }
+    Serial.print(n,HEX);
+    Serial.print(" ");
+}
+
+/*
+ * Contributed by Andrew Holt
+ */
+void print4Hex(uint16_t n) {
+    if( n < 0x1000 ) {
+        Serial.print("0");
+    }
+    if( n < 0x100 ) {
+        Serial.print("0");
+    }
+    if( n < 0x10 ) {
+        Serial.print("0");
+    }
+    Serial.print(n,HEX);
+}
+
+/*
+ * Contributed by Andrew Holt
+ */
+void printHexLine(uint16_t offset) {
+    uint16_t i;
+
+    for(i=offset;i < (offset + 0x10); i++) {
+        print2Hex(EEPROM.read(i));
+    }
+}
+
+/*
+ * Contributed by Andrew Holt
+ */
+void printAsciiLine(uint16_t offset) {
+    uint16_t i;
+    uint8_t n;
+
+    for(i=offset;i < (offset + 0x10); i++) {
+        n=EEPROM.read(i);
+        if((n >= ' ') && (n < 0x7f)) {
+            Serial.write(n);
+        } else {
+            Serial.print(".");
+        }
+    }
+}
+
+/*
+ * Contributed by Andrew Holt
+ */
+const PROGMEM char eeDump_str[] = "eeDump";
+void _eeprom_dump(void) {             // address count -- 
+    uint16_t addr;
+    uint16_t cnt;
+    uint16_t i;
+    uint8_t n;
+    char buf[17];
+
+    cnt=(pop() + 0x0f) & 0xff0;
+    
+    addr=pop() & 0xfff0;
+
+    // Only 1K EEPROM
+    for(i=addr;((i< (cnt+addr)) && (i < 1024));i+=0x10)  {
+        Serial.println();
+        print4Hex(i);
+        Serial.print(":");
+        printHexLine(i);
+
+        Serial.print(":");
+        printAsciiLine(i);
+    }
+    Serial.println();
+}
 #endif
 
 /********************************************************************************/
 /**                      Arduino Library Operations                            **/
 /********************************************************************************/
 #ifdef EN_ARDUINO_OPS
-#if defined(ARDUINO_ARCH_AVR)    // 8 bit Processor
 const PROGMEM char freeMem_str[] = "freeMem";
 void _freeMem(void) { 
   push(freeMem());
 }
-#endif
 
 const PROGMEM char delay_str[] = "delay";
 void _delay(void) {
@@ -2135,6 +2618,12 @@ const PROGMEM flashEntry_t flashDict[] = {
   { right_bracket_str,  _right_bracket,   NORMAL },
 
 #ifdef CORE_EXT_SET
+  { dot_paren_str,      _dot_paren,       IMMEDIATE },
+  { zero_not_equal_str, _zero_not_equal,  NORMAL },
+  { zero_greater_str,   _zero_greater,    NORMAL },
+  { two_to_r_str,       _two_to_r,        NORMAL },
+  { two_r_from_str,     _two_r_from,      NORMAL },
+  { two_r_fetch_str,    _two_r_fetch,     NORMAL },
   { neq_str,            _neq,             NORMAL },
   { hex_str,            _hex,             NORMAL },
 #endif
@@ -2143,6 +2632,10 @@ const PROGMEM flashEntry_t flashDict[] = {
 #endif
 
 #ifdef EXCEPTION_SET
+#endif
+
+#ifdef FACILITY_SET
+  { key_question_str,   _key_question,    NORMAL },
 #endif
 
 #ifdef LOCALS_SET
@@ -2165,9 +2658,7 @@ const PROGMEM flashEntry_t flashDict[] = {
 #endif
 
 #ifdef EN_ARDUINO_OPS
-#if defined(ARDUINO_ARCH_AVR)    // 8 bit Processor
   { freeMem_str,        _freeMem,         NORMAL },
-#endif
   { delay_str,          _delay,           NORMAL },
   { pinWrite_str,       _pinWrite,        NORMAL },
   { pinMode_str,        _pinMode,         NORMAL },
@@ -2180,6 +2671,10 @@ const PROGMEM flashEntry_t flashDict[] = {
 #ifdef EN_EEPROM_OPS
   { eeRead_str,         _eeprom_read,     NORMAL },
   { eeWrite_str,        _eeprom_write,    NORMAL },
+  { eeDump_str,         _eeprom_dump,     NORMAL },
+  { eeClear_str,        _eeprom_clear,    NORMAL },
+  { eeload_str,         _eeLoad,          NORMAL },
+  { eeInterpret_str,    _eeInterpret,     NORMAL },
 #endif
 
   { NULL,           NULL,    NORMAL }

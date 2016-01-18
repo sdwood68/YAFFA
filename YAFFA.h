@@ -44,7 +44,7 @@ typedef uint16_t addr_t;
 /******************************************************************************/
 /**  Environmental Constants and Name Strings                                **/
 /******************************************************************************/
-#define CORE          TRUE      // Complete Core Word Set
+#define CORE          FALSE     // Complete Core Word Set
 #define CORE_EXT      FALSE     // Complete Extended Core Word Set
 #define FLOORED       TRUE      // Floored Division is default
 #define MAX_CHAR      0x7E      // Max. value of any character
@@ -159,7 +159,6 @@ typedef uint16_t addr_t;
 typedef struct  {            // structure of the user dictionary
   addr_t       prevEntry;    // Pointer to the previous entry
   addr_t       cfa;          // Code Field Address
-//  addr_t       pfa;          // Parameter Field Address
   uint8_t      flags;        // Holds the length of the following name 
                              // and any flags.
   char         name[];       // Variable length name
