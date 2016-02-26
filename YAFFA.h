@@ -19,19 +19,43 @@
 /**  You should have received a copy of the GNU General Public License       **/
 /**  along with YAFFA.  If not, see <http://www.gnu.org/licenses/>.          **/
 /**                                                                          **/
+/******************************************************************************/
+/**                                                                          **/
+/** Processor Specific Definitions                                           **/
+/**                                                                          **/
+/** ARDUINO_ARCH_AVR                                                         **/
+/**    __AVR_ATmega168__  - Untested                                         **/
+/**    __AVR_ATmega168P__ - Untested                                         **/
+/**    __AVR_ATmega328P__ - Supported                                        **/
+/**    __AVR_ATmega1280__ - Untested                                         **/
+/**    __AVR_ATmega2560__ - Untested                                         **/
+/**    __AVR_ATmega32U4__ - Supported                                        **/
+/**                                                                          **/
+/** Board                   Architecture  Flash        SRAM        EEPROM    **/
+/** ------                  ------------- ------       ------      -------   **/
+/** Uno                     AVR           32K          2K          1K        **/
+/** Leonardo                AVR           32K          2.5K        1K        **/
+/**                                                                          **/
+/******************************************************************************/
 #ifndef __YAFFA_H__
 #define __YAFFA_H__
 
 /******************************************************************************/
 /** Memory Alignment Macros                                                  **/
 /******************************************************************************/
-#define ALIGN_P(x)  x = (cell_t*)((addr_t)(x + 1) & -2)
-#define ALIGN(x)  x = ((addr_t)(x + 1) & -2)
+#define ALIGN_P(x)  x = (cell_t*)((size_t)(x + 1) & -2)
+#define ALIGN(x)  x = ((size_t)(x + 1) & -2)
 
+#define T_SIZE(x) pow( 256, sizeof( x ) ) - 1
 #define MAX_OF(type) \
         (((type)(~0LU) > (type)((1LU<<((sizeof(type)<<3)-1)) -1LU)) ? \
         (long unsigned int)(type)(~0LU) : \
         (long unsigned int)(type)((1LU<<((sizeof(type)<<3)-1))-1LU))
+#define MIN_OF(type) \
+        (((type)(1LU<<((sizeof(type)<<3)-1)) < (type)1) ? \
+        (long int)((~0LU)-((1LU<<((sizeof(type)<<3)-1))-1LU)) : \
+        0L)
+
 /******************************************************************************/
 /** Memory Types                                                             **/
 /******************************************************************************/
@@ -39,23 +63,18 @@ typedef int16_t cell_t;
 typedef uint16_t ucell_t;
 typedef int32_t dcell_t;
 typedef uint32_t udcell_t;
-typedef uint16_t addr_t;
 
 /******************************************************************************/
 /**  Environmental Constants and Name Strings                                **/
 /******************************************************************************/
-#define CORE          FALSE     // Complete Core Word Set
+#define CORE          TRUE      // Complete Core Word Set
 #define CORE_EXT      FALSE     // Complete Extended Core Word Set
 #define FLOORED       TRUE      // Floored Division is default
 #define MAX_CHAR      0x7E      // Max. value of any character
-#define MAX_U         2^(CELL_BITS)-1      // largest usable unsigned integer
-#define MAX_N         2^(CELL_BITS-1)-1    // largest usable signed integer
-#define MAX_D         2^(2*CELL_BITS-1)-1  // Largest usable signed double number
-#define MAX_UD        2^(2*CELL_BITS)-1    // Largest usable unsigned double number
 
 
 /******************************************************************************/
-/** Board Specific                                                           **/
+/** CPU / Board Specific                                                           **/
 /**   STRING_SIZE - Maximum length of a counted string, in characters        **/
 /**   HOLD_SIZE   - Size of the pictured numeric output string buffer, in    **/
 /**                 characters                                               **/
@@ -68,47 +87,59 @@ typedef uint16_t addr_t;
 /**                 Definitions names shall is TOKEN_SIZE - 1 characters.    **/
 /**   FORTH_SIZE  - Size of Forth Space in bytes                             **/
 /******************************************************************************/
-
 #if defined(__AVR_ATmega328P__) // Arduino Uno
-  #define STRING_SIZE   31
+  static const unsigned long EPROM_SIZE = 1;
+  static const unsigned long SRAM_SIZE = 2;
+  #define PROC_STR "ATmega328P"
   #define HOLD_SIZE     31
-  #define PAD_SIZE      31
+  #define PAD_SIZE      96
   #define RSTACK_SIZE   16
   #define STACK_SIZE    16
   #define BUFFER_SIZE   96
-  #define WORD_SIZE    32
-  #define FORTH_SIZE    2*2048/(3*sizeof(cell_t))
+  #define WORD_SIZE     32
 
 #elif defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)  // Mega 1280 & 2560
+  static const unsigned long EPROM_SIZE = 4;
+  static const unsigned long SRAM_SIZE = 8;
+  #define PROC_STR "ATmega1280"
+  #define HOLD_SIZE     31
+  #define PAD_SIZE      127
+  #define RSTACK_SIZE   32
+  #define STACK_SIZE    32
+  #define BUFFER_SIZE   127
+  #define WORD_SIZE     32
 
 #elif defined(__AVR_ATmega32U4__) // Arduino Leonardo
-  #define STRING_SIZE   31
+  static const unsigned long EPROM_SIZE = 1;
+  static const unsigned long SRAM_SIZE = 2.5;
+  #define PROC_STR "ATmega32U4"
   #define HOLD_SIZE     31
-//  #define PAD_SIZE      31
+  #define PAD_SIZE      96
   #define RSTACK_SIZE   16
   #define STACK_SIZE    16
   #define BUFFER_SIZE   96
-  #define WORD_SIZE    32
-  #define FORTH_SIZE    1580
+  #define WORD_SIZE     32
 
 #endif
+
+static const unsigned long FORTH_SIZE    ((SRAM_SIZE*1024*2)/(sizeof(cell_t)*3));
+  
 
 
 /*******************************************************************************/
 /**                       Enable Dictionary Word Sets                         **/
 /*******************************************************************************/
 #define CORE_EXT_SET
-//#define DOUBLE_SET
+#define DOUBLE_SET
 #define EXCEPTION_SET
-//#define LOCALS_SET
-//#define MEMORY_SET
+#define LOCALS_SET
+#define MEMORY_SET
+#define FACILITY_SET
 #define TOOLS_SET
-//#define SEARCH_SET
-//#define STRING_SET
+#define SEARCH_SET
+#define STRING_SET
 #define EN_ARDUINO_OPS
-#if defined(ARDUINO_ARCH_AVR)
 #define EN_EEPROM_OPS
-#endif
 
 /******************************************************************************/
 /**  Numbering system                                                        **/
@@ -134,9 +165,16 @@ typedef uint16_t addr_t;
 #define FALSE       0       // All Bits set to 0
 
 /******************************************************************************/
-/**  Flags - Internal State and Word                                         **/
+/**  Flags - Internal State                                                  **/
 /******************************************************************************/
-// Flags used to define word properties 
+#define ECHO_ON        0x01    // Echo characters typed on the serial input
+#define NUM_PROC       0x02    // Pictured Numeric Process
+#define EXECUTE        0x04
+
+/******************************************************************************/
+/**  wordFlags - Flags used to define word properties                        **/
+/******************************************************************************/
+// 
 #define NORMAL         0x00
 #define SMUDGE         0x20    // Word is hidden during searches
 #define COMP_ONLY      0x40    // Word is only usable during compilation
@@ -157,8 +195,8 @@ typedef uint16_t addr_t;
 /**  User Dictionary Header                                                  **/
 /******************************************************************************/
 typedef struct  {            // structure of the user dictionary
-  addr_t       prevEntry;    // Pointer to the previous entry
-  addr_t       cfa;          // Code Field Address
+  void*        prevEntry;    // Pointer to the previous entry
+  cell_t*      cfa;          // Code Field Address
   uint8_t      flags;        // Holds the length of the following name 
                              // and any flags.
   char         name[];       // Variable length name
@@ -197,5 +235,8 @@ extern const PROGMEM flashEntry_t flashDict[];        // forward reference
 #define S_QUOTE_IDX        13
 #define DOT_QUOTE_IDX      14
 #define VARIABLE_IDX       15
+#define OVER_IDX           16
+#define EQUAL_IDX          17
+#define DROP_IDX           18
 
 #endif
