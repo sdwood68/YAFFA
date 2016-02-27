@@ -1489,7 +1489,7 @@ const PROGMEM char space_str[] = "space";
 // ( -- )
 // Display one space
 void _space(void) {
-  serial_print_P(sp_str);
+  Serial.print(F(" "));
 }
 
 const PROGMEM char spaces_str[] = "spaces";
@@ -1499,7 +1499,7 @@ const PROGMEM char spaces_str[] = "spaces";
 void _spaces(void) {
   char n = (char) pop();
   while (n > 0) {
-    serial_print_P(sp_str);
+    Serial.print(F(" "));
     n--;
   }
 }
