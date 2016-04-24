@@ -562,6 +562,7 @@ const PROGMEM char to_number_str[] = ">number";
 // specified by c-addr1 u1 into digits, using the number in BASE, and adding
 // each into ud1 after multiplying ud1 by the number in BASE.  Conversion
 // continues left-to-right until a character that is not convertible,
+// including any '+' or '-', is encountered or the string is entirely
 // converted.  c-addr2 is the location of the first unconverted character or
 // the first character past the end of the string if the string was entirely
 // converted.  u2 is the number of unconverted characters in the string.  An
