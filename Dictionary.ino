@@ -562,7 +562,6 @@ const PROGMEM char to_number_str[] = ">number";
 // specified by c-addr1 u1 into digits, using the number in BASE, and adding
 // each into ud1 after multiplying ud1 by the number in BASE.  Conversion
 // continues left-to-right until a character that is not convertible,
-// including any “+” or “-”, is encountered or the string is entirely
 // converted.  c-addr2 is the location of the first unconverted character or
 // the first character past the end of the string if the string was entirely
 // converted.  u2 is the number of unconverted characters in the string.  An
@@ -1543,8 +1542,10 @@ void _type(void) {
 const PROGMEM char u_dot_str[] = "u.";
 // ( u -- )
 // Displau u in free field format
+// tested and fixed by Alex Moskovskij
 void _u_dot(void) {
   Serial.print((ucell_t) pop());
+  Serial.print(F(" "));
 }
 
 const PROGMEM char u_lt_str[] = "u<";
@@ -1560,7 +1561,9 @@ const PROGMEM char um_star_str[] = "um*";
 // multiply u1 by u2, giving the unsigned double-cell product ud
 // tested and fixed by Alex Moskovskij
 void _um_star(void) {
-  udcell_t ud = (udcell_t)pop() * (udcell_t)pop();
+  ucell_t u2 = (ucell_t)pop();
+  ucell_t u1 = (ucell_t)pop();
+  udcell_t ud = (udcell_t)u1 * (udcell_t)u2;
   ucell_t lsb = ud;
   ucell_t msb = (ud >> sizeof(ucell_t) * 8);
   push(lsb);
