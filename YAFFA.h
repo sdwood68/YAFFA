@@ -189,6 +189,7 @@ static const unsigned long FORTH_SIZE    ((SRAM_SIZE*1024*2)/(sizeof(cell_t)*3))
 #define CASE_SYS     -3
 #define OF_SYS       -4
 #define LOOP_SYS     -5
+#define LEAVE_SYS    -6
 
 
 /******************************************************************************/

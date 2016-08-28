@@ -1,6 +1,6 @@
 /******************************************************************************/
 /**  YAFFA - Yet Another Forth for Arduino                                   **/
-/**  Version 0.6.2                                                           **/
+/**  Version 0.7.0                                                           **/
 /**                                                                          **/
 /**  File: YAFFA.ino                                                         **/
 /**  Copyright (C) 2012 Stuart Wood (swood@rochester.rr.com)                 **/
@@ -38,6 +38,9 @@
 /**                                                                          **/
 /**  REVISION HISTORY:                                                       **/
 /**                                                                          **/
+/**    0.7.0                                                                **/
+/**    - Fixed the how LEAVE is handled in LOOP and +LOOP.                   **/
+/**    0.6.2                                                                 **/
 /**    - Added words ">NUMBER", "KEY?", ".(", "0<>", "0>", "2>R", "2R>",     **/
 /**      "2R@".                                                              **/
 /**    - Removed static from the function headers to avoid compilation       **/
@@ -82,7 +85,7 @@
 
 #include "YAFFA.h"
 #include "Error_Codes.h"
-#include <MemoryFree.h>
+#include <MemoryFree.h>  // https://github.com/McNeight/MemoryFree
 #include <EEPROM.h>
 #include <avr/pgmspace.h>
 
@@ -90,7 +93,7 @@
 /** Major and minor revision numbers                                         **/
 /******************************************************************************/
 #define YAFFA_MAJOR 0
-#define YAFFA_MINOR 6
+#define YAFFA_MINOR 7
 #define MAKESTR(a) #a
 #define MAKEVER(a, b) MAKESTR(a*256+b)
 asm(" .section .version\n"
@@ -301,7 +304,7 @@ void setup(void) {
   } else {
     serial_print_P(PSTR(" Load from EEPROM.\r\n"));
     if( digitalRead(14) == 0) {
-        serial_print_P(PSTR(" Inhibited by in 14.\r\n"));
+        serial_print_P(PSTR(" Inhibited by pin 14.\r\n"));
     } else {
         _eeInterpret();
     }
@@ -704,7 +707,7 @@ void rPush(cell_t value) {
 }
 
 /*********************************************/
-/** Pop (remove) a cell onto the data stack **/
+/** Pop (remove) a cell from the data stack **/
 /*********************************************/
 cell_t pop(void) {
   if (tos > -1) {
@@ -717,7 +720,7 @@ cell_t pop(void) {
 }
 
 /***********************************************/
-/** Pop (remove) a cell onto the return stack **/
+/** Pop (remove) a cell from the return stack **/
 /***********************************************/
 cell_t rPop(void) {
   if (rtos > -1) {
@@ -727,6 +730,26 @@ cell_t rPop(void) {
     _throw();
   }
   return 0;
+}
+
+void showRStack(void) {
+  int idx;
+  Serial.print("\tR: ");
+  for(idx = rtos; idx >= 0; idx--) {
+    Serial.print(rStack[idx]);
+    if (idx != 0) Serial.print(", ");
+    else Serial.println();
+  }
+}
+
+void showStack(void) {
+  int idx;
+  Serial.print("\tD: ");
+  for(idx = tos; idx >= 0; idx--) {
+    Serial.print(stack[idx]);
+    if (idx != 0) Serial.print(", ");
+    else Serial.println();
+  }
 }
 
 /******************************************************************************/

@@ -270,17 +270,20 @@ const PROGMEM char plus_loop_str[] = "+loop";
 // continue execution immediately following the loop.
 void _plus_loop(void) {
   *pHere++ = PLUS_LOOP_SYS_IDX;
-  *pHere++ = pop();
-  cell_t* leave = (cell_t*)pop();
-  if (leave != (cell_t*)DO_SYS) {
-    if (stack[tos] == DO_SYS) {
-      *leave = (size_t)pHere;
-      pop();
-    } else {
-      push(-22);
-      _throw();
-      return;
+  cell_t start_addr = pop();
+  *pHere++ = start_addr;
+  cell_t* ptr = start_addr;
+  cell_t stop_addr = pHere;
+  do {
+    if (*ptr++ == LEAVE_SYS_IDX) {
+      if (*ptr == 0) {
+        *ptr = stop_addr;
+      }
     }
+  } while (ptr != stop_addr);
+  if ( pop() != DO_SYS) {
+    push(-22);
+    _throw();
   }
 }
 
@@ -1192,9 +1195,7 @@ const PROGMEM char leave_str[] = "leave";
 // Execution: ( -- ) (R: loop-sys -- )
 void _leave(void) {
   *pHere++ = LEAVE_SYS_IDX;
-  push((size_t)pHere);
   *pHere++ = 0;
-  _swap();
 }
 
 const PROGMEM char literal_str[] = "literal";
@@ -1217,17 +1218,20 @@ const PROGMEM char loop_str[] = "loop";
 // Run-Time: ( -- ) (R: loop-sys1 -- loop-sys2 )
 void _loop(void) {
   *pHere++ = LOOP_SYS_IDX;
-  *pHere++ = pop();
-  cell_t* leave = (cell_t*)pop();
-  if (leave != (cell_t*)DO_SYS) {
-    if (stack[tos] == DO_SYS) {
-      *leave = (size_t)pHere;
-      pop();
-    } else {
-      push(-22);
-      _throw();
-      return;
+  cell_t start_addr = pop();
+  *pHere++ = start_addr;
+  cell_t stop_addr = (cell_t)pHere;
+  cell_t* ptr = start_addr;
+  do {
+    if (*ptr++ == LEAVE_SYS_IDX) {
+      if (*ptr == 0) {
+        *ptr = stop_addr;
+      }
     }
+  } while (ptr != stop_addr);
+  if ( pop() != DO_SYS) {
+    push(-22);
+    _throw();
   }
 }
 
@@ -2115,7 +2119,7 @@ void _see(void) {
             Serial.print(*ptr++);
           } while (*ptr != 0);
           Serial.print(F("\x22"));
-          addr = (cell_t *)++ptr;
+          addr = (cell_t *)ptr;
           ALIGN_P(addr);
           break;
       }
