@@ -1,12 +1,9 @@
-
-eeLoad
-
 : test
-    13 1 pinMode
+    1 13 pinMode
     begin
-        13 0 pinWrite
+        0 13 pinWrite
         500 delay
-        13 1 pinWrite
+        1 13 pinWrite
         500 delay
     0 until 
 ;
