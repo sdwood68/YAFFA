@@ -632,7 +632,7 @@ SKIP:                // common code to skip initial character
 /** freeMem returns the amount of free forth space left.                     **/
 /******************************************************************************/
 static unsigned int freeMem(void) {
-  return (pHere - forthSpace);
+  return (((int)&forthSpace[FORTH_SIZE] - (int)pHere) / sizeof(cell_t));
 }
 
 /******************************************************************************/
