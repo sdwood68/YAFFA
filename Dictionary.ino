@@ -105,7 +105,7 @@ void _plus_loop_sys(void) {
   cell_t limit = rPop();    // fetch limit
   cell_t index = rPop();    // fetch index
   index += pop();
-  if (limit != index) {
+  if (limit > index) {
     rPush(index);
     rPush(limit);
     ip = (cell_t*)*ip;
