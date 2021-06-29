@@ -1,9 +1,9 @@
 : test
-    1 13 pinMode
+    13 1 pinMode
     begin
-        0 13 pinWrite
+        13 0 pinWrite
         500 delay
-        1 13 pinWrite
+        13 1 pinWrite
         500 delay
     0 until 
 ;
